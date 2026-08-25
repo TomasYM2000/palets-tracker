@@ -4,6 +4,8 @@ const SheetsAPI = (() => {
   const OWN_HEADERS = ['Fecha', 'Cliente', 'Cantidad', 'Usuario', 'Observaciones'];
   const CLIENTES_SHEET_NAME = 'ClientesConfig';
   const CLIENTES_HEADERS = ['Original', 'MostrarComo', 'Excluir'];
+  const ACCESOS_SHEET_NAME = 'Accesos';
+  const ACCESOS_HEADERS = ['Fecha', 'Nombre', 'Email', 'Rol'];
 
   let _ownSheetId = '';
   let _cargasSheetId = '';
@@ -175,7 +177,7 @@ const SheetsAPI = (() => {
 
   async function _ensureOwnSheet() {
     const existing = await _getSheetsList(_ownSheetId);
-    const missing = [OWN_SHEET_NAME, CLIENTES_SHEET_NAME].filter(n => !existing.includes(n));
+    const missing = [OWN_SHEET_NAME, CLIENTES_SHEET_NAME, ACCESOS_SHEET_NAME].filter(n => !existing.includes(n));
     if (missing.length) {
       await gapi.client.sheets.spreadsheets.batchUpdate({
         spreadsheetId: _ownSheetId,
@@ -189,6 +191,27 @@ const SheetsAPI = (() => {
     const cliData = await _readRange(_ownSheetId, `${CLIENTES_SHEET_NAME}!A1:C1`, true);
     if (!cliData || !cliData.length) {
       await _writeRange(_ownSheetId, `${CLIENTES_SHEET_NAME}!A1`, [CLIENTES_HEADERS]);
+    }
+    const accData = await _readRange(_ownSheetId, `${ACCESOS_SHEET_NAME}!A1:D1`, true);
+    if (!accData || !accData.length) {
+      await _writeRange(_ownSheetId, `${ACCESOS_SHEET_NAME}!A1`, [ACCESOS_HEADERS]);
+    }
+  }
+
+  // Registra cada login en la hoja "Accesos" (Fecha, Nombre, Email, Rol).
+  // Best-effort: si falla (ej. la cuenta es Lector y no tiene permiso de
+  // escritura), no rompe el login — solo se pierde ese registro puntual.
+  async function logAccess(nombre) {
+    try {
+      const row = [
+        new Date().toLocaleString('es-AR'),
+        nombre || '',
+        (_userInfo && _userInfo.email) || '',
+        _canEdit ? 'Editor' : 'Lector'
+      ];
+      await _writeRange(_ownSheetId, `${ACCESOS_SHEET_NAME}!A1`, [row]);
+    } catch (e) {
+      console.warn('No se pudo registrar el acceso en la hoja Accesos:', e);
     }
   }
 
@@ -334,6 +357,6 @@ const SheetsAPI = (() => {
   return {
     init, signOut, isReady, getUserName, canEdit, canEditDetected,
     readCargas, readPedidos, readDevoluciones, appendDevolucion,
-    readClientesConfig, saveClientesConfig
+    readClientesConfig, saveClientesConfig, logAccess
   };
 })();

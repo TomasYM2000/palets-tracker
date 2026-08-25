@@ -141,35 +141,42 @@
 </div>
 
 <!-- ══════════════════════════════════════════════════════════════════════════ -->
-<!-- MODAL SETUP                                                               -->
+<!-- MODAL BIENVENIDA (solo la primera vez, en este navegador)                -->
 <!-- ══════════════════════════════════════════════════════════════════════════ -->
-<div class="modal-overlay" id="modal-setup">
+<div class="modal-overlay" id="modal-welcome">
   <div class="modal" style="position:relative">
-    <button class="modal-close" id="modal-close">✕</button>
-    <h2>⚙ Configurar Google Sheets</h2>
-    <p>Conectá la app con tu Google Sheets de devoluciones.</p>
+    <h2>🧱 ¡Bienvenido a Palets Tracker!</h2>
+    <p>Antes de arrancar, decinos cómo te llamás — así quedan identificadas las devoluciones que registrás.</p>
 
-    <div class="setup-steps">
-      <ol>
-        <li>Creá una Google Sheet <strong>en blanco</strong> (distinta a la de administración) y copiá su ID de la URL.</li>
-        <li>Iniciá sesión con una cuenta de Google que tenga acceso al Sheets "Producción BELIPEL" (para poder leer la hoja "Cargas").</li>
-        <li>Asegurate de que la hoja "Cargas" tenga una columna llamada <strong>"Palets"</strong>.</li>
-        <li>Tu rol lo define el permiso que tengas en esta Sheet de devoluciones: <strong>Editor</strong> podés registrar devoluciones, <strong>Lector</strong> solo ves los saldos. El administrador es quien comparte la hoja (botón "Compartir" en Google Sheets) y decide quién entra como qué.</li>
-      </ol>
-    </div>
+    <form id="form-welcome">
+      <div class="form-group">
+        <label for="input-nombre">Tu nombre</label>
+        <input type="text" id="input-nombre" placeholder="Ej: Tomás" required maxlength="40" autocomplete="off" />
+      </div>
+      <div class="form-group">
+        <label for="input-codigo">Código de acceso</label>
+        <input type="password" id="input-codigo" placeholder="Código de BELIPEL" required autocomplete="off" />
+      </div>
+      <div class="modal-footer">
+        <button type="submit" class="btn-success" style="flex:1">🔗 Continuar y conectar con Google</button>
+      </div>
+    </form>
+  </div>
+</div>
 
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!-- MODAL AJUSTES (cambiar el nombre)                                        -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-settings">
+  <div class="modal" style="position:relative">
+    <button class="modal-close" id="modal-settings-close">✕</button>
+    <h2>⚙ Ajustes</h2>
     <div class="form-group">
-      <label for="input-client-id">OAuth2 Client ID</label>
-      <input type="text" id="input-client-id" placeholder="xxxxx.apps.googleusercontent.com" />
+      <label for="input-nombre-editar">Tu nombre</label>
+      <input type="text" id="input-nombre-editar" maxlength="40" autocomplete="off" />
     </div>
-    <div class="form-group">
-      <label for="input-sheet-id">ID de tu Google Sheet de devoluciones</label>
-      <input type="text" id="input-sheet-id" placeholder="ID de una Sheet nueva y vacía" />
-      <span class="input-hint">Está en la URL: docs.google.com/spreadsheets/d/<strong>ID</strong>/edit</span>
-    </div>
-
     <div class="modal-footer">
-      <button id="btn-connect" class="btn-success" style="flex:1">🔗 Conectar con Google</button>
+      <button id="btn-guardar-nombre" class="btn-success" style="flex:1">Guardar</button>
     </div>
   </div>
 </div>
@@ -184,9 +191,9 @@
 <div id="toast-container"></div>
 
 <!-- ── Scripts ──────────────────────────────────────────────────────────────── -->
-<script src="sheets.js?v=9"></script>
-<script src="saldos.js?v=9"></script>
-<script src="app.js?v=9"></script>
+<script src="sheets.js?v=11"></script>
+<script src="saldos.js?v=11"></script>
+<script src="app.js?v=11"></script>
 <!-- Google APIs (loaded last, callbacks boot the app) -->
 <script src="https://apis.google.com/js/api.js?onload=onGapiLoaded" async defer></script>
 <script src="https://accounts.google.com/gsi/client" async defer onload="onGsiLoaded()"></script>

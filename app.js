@@ -3,10 +3,16 @@
 
 const CONFIG = {
   CLIENT_ID: '256488140515-6imleh7dn02li22va3l5466eg37o1nie.apps.googleusercontent.com',
-  OWN_SHEET_ID: '',
+  OWN_SHEET_ID: '1IYXnocNrVX2NveS9arK7uIP3QKagKrXhWqeMzFvpPJE',
   CARGAS_SHEET_ID: '13w33rmB7HmSMushiFdt7kwJZJoSsietlBmqs23-JUCQ',
   CARGAS_TAB: 'Cargas',
-  PEDIDOS_TAB: 'PEDIDOS'
+  PEDIDOS_TAB: 'PEDIDOS',
+  // Ojo: esto es visible para cualquiera que mire el código fuente de la
+  // página — es un filtro liviano contra curiosos, NO una barrera de
+  // seguridad real. La protección real es (1) la lista de usuarios de
+  // prueba en Google Cloud, que bloquea el login de cuentas no autorizadas,
+  // y (2) los permisos de Editor/Lector del Sheets de devoluciones.
+  ACCESS_CODE: 'Belipel2026'
 };
 
 const App = (() => {
@@ -38,32 +44,36 @@ const App = (() => {
     setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 300); }, 3500);
   }
 
-  // ── Auth & setup ────────────────────────────────────────────────────────────
-  function showSetup() {
-    document.getElementById('input-client-id').value = localStorage.getItem('palets_clientId') || CONFIG.CLIENT_ID;
-    document.getElementById('input-sheet-id').value = localStorage.getItem('palets_ownSheetId') || '';
-    document.getElementById('modal-setup').style.display = 'flex';
+  // ── Nombre del usuario (reemplaza el nombre/email de Google en "Usuario") ───
+  function getDisplayName() {
+    return localStorage.getItem('palets_displayName') || '';
   }
 
-  async function connectSheets() {
-    const clientId = document.getElementById('input-client-id').value.trim();
-    const sheetId = document.getElementById('input-sheet-id').value.trim();
-    if (!clientId || !sheetId) { toast('Ingresá el Client ID y el ID de tu Sheet', 'error'); return; }
+  function showWelcome() {
+    document.getElementById('modal-welcome').style.display = 'flex';
+  }
 
+  function showSettings() {
+    document.getElementById('input-nombre-editar').value = getDisplayName();
+    document.getElementById('modal-settings').style.display = 'flex';
+  }
+
+  // ── Auth & conexión (Client ID y Sheet ID ya son fijos, nadie los toca) ─────
+  async function connectSheets() {
     setLoading(true, 'Conectando con Google Sheets…');
     try {
-      await SheetsAPI.init(clientId, sheetId, CONFIG.CARGAS_SHEET_ID, CONFIG.CARGAS_TAB, CONFIG.PEDIDOS_TAB);
-      document.getElementById('modal-setup').style.display = 'none';
+      await SheetsAPI.init(CONFIG.CLIENT_ID, CONFIG.OWN_SHEET_ID, CONFIG.CARGAS_SHEET_ID, CONFIG.CARGAS_TAB, CONFIG.PEDIDOS_TAB);
       document.getElementById('btn-logout').style.display = 'inline-flex';
       const badge = document.getElementById('user-badge');
       const rol = SheetsAPI.canEdit() ? 'Editor' : 'Solo lectura';
-      badge.textContent = `${SheetsAPI.getUserName()} · ${rol}`;
+      badge.textContent = `${getDisplayName()} · ${rol}`;
       badge.style.display = 'inline';
       applyPermissions();
       if (!SheetsAPI.canEditDetected()) {
         toast('No se pudo confirmar tu permiso (Editor/Lector) — habilitá la Drive API en Google Cloud Console para que la detección sea exacta. Por ahora se asume Editor.', 'error');
       }
       toast('Conectado a Google Sheets', 'success');
+      SheetsAPI.logAccess(getDisplayName());
       await loadData();
     } catch (e) {
       toast('Error al conectar: ' + errMsg(e), 'error');
@@ -72,11 +82,16 @@ const App = (() => {
     }
   }
 
+  // "Salir" deja el dispositivo listo para que entre otra persona: limpia el
+  // nombre y la pista de la última cuenta de Google usada, para no forzar la
+  // misma cuenta/nombre en el siguiente login.
   function logout() {
     SheetsAPI.signOut();
+    localStorage.removeItem('palets_displayName');
+    localStorage.removeItem('palets_lastEmail');
     document.getElementById('btn-logout').style.display = 'none';
     document.getElementById('user-badge').style.display = 'none';
-    showSetup();
+    showWelcome();
     toast('Sesión cerrada');
   }
 
@@ -130,7 +145,7 @@ const App = (() => {
         fecha,
         cliente,
         cantidad,
-        usuario: SheetsAPI.getUserName(),
+        usuario: getDisplayName() || SheetsAPI.getUserName(),
         observaciones: document.getElementById('dev-obs').value.trim()
       };
 
@@ -357,26 +372,45 @@ const App = (() => {
     initTabs();
     initDevolucionForm();
 
-    document.getElementById('btn-connect').addEventListener('click', connectSheets);
+    document.getElementById('form-welcome').addEventListener('submit', e => {
+      e.preventDefault();
+      const nombre = document.getElementById('input-nombre').value.trim();
+      const codigo = document.getElementById('input-codigo').value;
+      if (!nombre) return;
+      if (codigo !== CONFIG.ACCESS_CODE) { toast('Código de acceso incorrecto', 'error'); return; }
+      localStorage.setItem('palets_displayName', nombre);
+      document.getElementById('modal-welcome').style.display = 'none';
+      connectSheets();
+    });
+
     document.getElementById('btn-logout').addEventListener('click', logout);
     document.getElementById('btn-refresh').addEventListener('click', loadData);
-    document.getElementById('btn-settings').addEventListener('click', showSetup);
-    document.getElementById('modal-close').addEventListener('click', () => {
-      document.getElementById('modal-setup').style.display = 'none';
+    document.getElementById('btn-settings').addEventListener('click', showSettings);
+    document.getElementById('modal-settings-close').addEventListener('click', () => {
+      document.getElementById('modal-settings').style.display = 'none';
     });
+    document.getElementById('btn-guardar-nombre').addEventListener('click', () => {
+      const nombre = document.getElementById('input-nombre-editar').value.trim();
+      if (!nombre) { toast('Ingresá un nombre', 'error'); return; }
+      localStorage.setItem('palets_displayName', nombre);
+      document.getElementById('modal-settings').style.display = 'none';
+      const badge = document.getElementById('user-badge');
+      if (badge.style.display !== 'none') {
+        const rol = SheetsAPI.canEdit() ? 'Editor' : 'Solo lectura';
+        badge.textContent = `${nombre} · ${rol}`;
+      }
+      toast('Nombre actualizado', 'success');
+    });
+
     document.getElementById('saldos-search').addEventListener('input', e => renderSaldosTable(e.target.value.trim().toLowerCase()));
     document.getElementById('historial-search').addEventListener('input', e => renderHistorial(e.target.value.trim().toLowerCase()));
     document.getElementById('clientes-search').addEventListener('input', e => renderClientes(e.target.value.trim().toLowerCase()));
     document.getElementById('btn-guardar-clientes').addEventListener('click', guardarClientes);
 
-    const savedClientId = localStorage.getItem('palets_clientId');
-    const savedSheetId = localStorage.getItem('palets_ownSheetId');
-    if (savedClientId && savedSheetId) {
-      document.getElementById('input-client-id').value = savedClientId;
-      document.getElementById('input-sheet-id').value = savedSheetId;
-      setTimeout(connectSheets, 300);
+    if (getDisplayName()) {
+      connectSheets();
     } else {
-      showSetup();
+      showWelcome();
     }
   }
 
