@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Palets Tracker — BELIPEL</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<!-- ── Header ──────────────────────────────────────────────────────────────── -->
+<header>
+  <div class="header-left">
+    <span class="header-logo">🧱</span>
+    <div>
+      <div class="header-title">Palets Tracker</div>
+      <div class="header-sub">BELIPEL · Devolución de palets por cliente</div>
+    </div>
+  </div>
+  <div class="header-actions">
+    <span id="user-badge"></span>
+    <button id="btn-refresh" class="btn-ghost">⟳</button>
+    <button id="btn-settings" class="btn-ghost">⚙</button>
+    <button id="btn-logout" class="btn-ghost btn-danger">Salir</button>
+  </div>
+</header>
+
+<!-- ── Tabs ─────────────────────────────────────────────────────────────────── -->
+<nav class="tabs">
+  <button class="tab-btn" data-tab="registro">➕ Registrar devolución</button>
+  <button class="tab-btn active" data-tab="dashboard">📊 Saldos</button>
+  <button class="tab-btn" data-tab="historial">🕘 Historial</button>
+  <button class="tab-btn" data-tab="chequeo">🔍 Chequeo</button>
+  <button class="tab-btn" data-tab="clientes">👥 Clientes</button>
+</nav>
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!-- REGISTRAR DEVOLUCIÓN                                                      -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<div class="tab-pane" id="pane-registro">
+  <div class="form-card">
+    <h2>➕ Registrar devolución de palets</h2>
+    <form id="form-devolucion" novalidate>
+      <div class="form-grid">
+        <div class="form-group full">
+          <label for="dev-cliente">Cliente</label>
+          <input type="text" id="dev-cliente" list="lista-clientes" placeholder="Escribí o elegí un cliente" required autocomplete="off" maxlength="100" />
+          <datalist id="lista-clientes"></datalist>
+        </div>
+        <div class="form-group full">
+          <label for="dev-cantidad">Cantidad de palets devueltos</label>
+          <div class="qty-control">
+            <button type="button" id="qty-minus">−</button>
+            <input type="number" id="dev-cantidad" min="1" step="1" value="1" required />
+            <button type="button" id="qty-plus">+</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="dev-fecha">Fecha</label>
+          <input type="date" id="dev-fecha" required />
+        </div>
+        <div class="form-group full">
+          <label for="dev-obs">Observaciones</label>
+          <textarea id="dev-obs" placeholder="Notas opcionales…" maxlength="500"></textarea>
+        </div>
+      </div>
+      <button type="submit">💾 Guardar devolución</button>
+    </form>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!-- DASHBOARD DE SALDOS                                                       -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<div class="tab-pane active" id="pane-dashboard">
+  <div class="dashboard-header">
+    <h1>Saldo de palets por cliente</h1>
+  </div>
+
+  <div id="kpi-grid" class="kpi-grid">
+    <p class="no-data">Conectá Google Sheets para ver los datos</p>
+  </div>
+
+  <div class="section-card">
+    <h3>Clientes</h3>
+    <div class="search-box">
+      <input type="text" id="saldos-search" placeholder="Buscar cliente…" />
+    </div>
+    <div id="saldos-table"><p class="no-data">Sin datos</p></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!-- HISTORIAL                                                                 -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<div class="tab-pane" id="pane-historial">
+  <div class="section-card">
+    <h3>Historial de devoluciones</h3>
+    <div class="search-box">
+      <input type="text" id="historial-search" placeholder="Buscar cliente…" />
+    </div>
+    <div id="historial-table"><p class="no-data">Sin datos</p></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!-- CHEQUEO PEDIDOS VS CARGAS                                                 -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<div class="tab-pane" id="pane-chequeo">
+  <div class="section-card">
+    <h3>🔍 Chequeo: palets pedidos vs. cargados</h3>
+    <p class="chequeo-note">
+      Compara, por cliente, el total de palets pedidos (parseado del texto en la columna
+      "Observaciones" de la hoja PEDIDOS, ej. "8 Palets") contra el total cargado (columna
+      "Palets" de Cargas). Es una comparación <strong>acumulada por cliente</strong> — no hay un
+      ID que una cada pedido con su carga, así que no es un cruce pedido-por-pedido exacto.
+    </p>
+    <div id="chequeo-table"><p class="no-data">Sin datos</p></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!-- CLIENTES (unificar nombres / excluir no-clientes)                        -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<div class="tab-pane" id="pane-clientes">
+  <div class="section-card">
+    <h3>👥 Clientes</h3>
+    <p class="chequeo-note">
+      Los nombres tal cual aparecen en Cargas/Pedidos. Completá "Mostrar como" para unificar
+      variantes del mismo cliente (ej. "CUENCA" y "Cuenca" → un mismo nombre), o tildá "Excluir"
+      para que esa fila no cuente en Saldos ni en el Chequeo (ej. movimientos internos, stock, etc.).
+      Ordenados por volumen de palets: conviene unificar primero los que más pesan.
+    </p>
+    <div class="search-box">
+      <input type="text" id="clientes-search" placeholder="Buscar nombre…" />
+    </div>
+    <datalist id="lista-nombres-canonicos"></datalist>
+    <div id="clientes-table"><p class="no-data">Sin datos</p></div>
+    <button id="btn-guardar-clientes" class="btn-primary" style="margin-top:1rem">💾 Guardar cambios</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!-- MODAL SETUP                                                               -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-setup">
+  <div class="modal" style="position:relative">
+    <button class="modal-close" id="modal-close">✕</button>
+    <h2>⚙ Configurar Google Sheets</h2>
+    <p>Conectá la app con tu Google Sheets de devoluciones.</p>
+
+    <div class="setup-steps">
+      <ol>
+        <li>Creá una Google Sheet <strong>en blanco</strong> (distinta a la de administración) y copiá su ID de la URL.</li>
+        <li>Iniciá sesión con una cuenta de Google que tenga acceso al Sheets "Producción BELIPEL" (para poder leer la hoja "Cargas").</li>
+        <li>Asegurate de que la hoja "Cargas" tenga una columna llamada <strong>"Palets"</strong>.</li>
+        <li>Tu rol lo define el permiso que tengas en esta Sheet de devoluciones: <strong>Editor</strong> podés registrar devoluciones, <strong>Lector</strong> solo ves los saldos. El administrador es quien comparte la hoja (botón "Compartir" en Google Sheets) y decide quién entra como qué.</li>
+      </ol>
+    </div>
+
+    <div class="form-group">
+      <label for="input-client-id">OAuth2 Client ID</label>
+      <input type="text" id="input-client-id" placeholder="xxxxx.apps.googleusercontent.com" />
+    </div>
+    <div class="form-group">
+      <label for="input-sheet-id">ID de tu Google Sheet de devoluciones</label>
+      <input type="text" id="input-sheet-id" placeholder="ID de una Sheet nueva y vacía" />
+      <span class="input-hint">Está en la URL: docs.google.com/spreadsheets/d/<strong>ID</strong>/edit</span>
+    </div>
+
+    <div class="modal-footer">
+      <button id="btn-connect" class="btn-success" style="flex:1">🔗 Conectar con Google</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Loading overlay ───────────────────────────────────────────────────────── -->
+<div id="loading-overlay">
+  <div class="spinner"></div>
+  <p>Cargando…</p>
+</div>
+
+<!-- ── Toast container ──────────────────────────────────────────────────────── -->
+<div id="toast-container"></div>
+
+<!-- ── Scripts ──────────────────────────────────────────────────────────────── -->
+<script src="sheets.js?v=9"></script>
+<script src="saldos.js?v=9"></script>
+<script src="app.js?v=9"></script>
+<!-- Google APIs (loaded last, callbacks boot the app) -->
+<script src="https://apis.google.com/js/api.js?onload=onGapiLoaded" async defer></script>
+<script src="https://accounts.google.com/gsi/client" async defer onload="onGsiLoaded()"></script>
+
+</body>
+</html>

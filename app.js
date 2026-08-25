@@ -1,0 +1,391 @@
+// app.js — Main application logic
+'use strict';
+
+const CONFIG = {
+  CLIENT_ID: '256488140515-6imleh7dn02li22va3l5466eg37o1nie.apps.googleusercontent.com',
+  OWN_SHEET_ID: '',
+  CARGAS_SHEET_ID: '13w33rmB7HmSMushiFdt7kwJZJoSsietlBmqs23-JUCQ',
+  CARGAS_TAB: 'Cargas',
+  PEDIDOS_TAB: 'PEDIDOS'
+};
+
+const App = (() => {
+  let _cargas = [];
+  let _pedidos = [];
+  let _devoluciones = [];
+  let _clientesConfig = [];
+  let _saldos = [];
+  let _chequeo = [];
+  let _clientesEditables = [];
+
+  // Las llamadas a gapi/Sheets a veces rechazan con un objeto plano
+  // ({result:{error:{message}}}) en vez de un Error real, donde e.message
+  // queda undefined — esto extrae un texto legible en cualquier caso.
+  function errMsg(e) {
+    if (!e) return 'Error desconocido';
+    if (e.result && e.result.error && e.result.error.message) return e.result.error.message;
+    if (e.message) return e.message;
+    try { return JSON.stringify(e); } catch { return String(e); }
+  }
+
+  // ── Toast ───────────────────────────────────────────────────────────────────
+  function toast(msg, type = 'info') {
+    const el = document.createElement('div');
+    el.className = `toast toast-${type}`;
+    el.textContent = msg;
+    document.getElementById('toast-container').appendChild(el);
+    setTimeout(() => el.classList.add('show'), 10);
+    setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 300); }, 3500);
+  }
+
+  // ── Auth & setup ────────────────────────────────────────────────────────────
+  function showSetup() {
+    document.getElementById('input-client-id').value = localStorage.getItem('palets_clientId') || CONFIG.CLIENT_ID;
+    document.getElementById('input-sheet-id').value = localStorage.getItem('palets_ownSheetId') || '';
+    document.getElementById('modal-setup').style.display = 'flex';
+  }
+
+  async function connectSheets() {
+    const clientId = document.getElementById('input-client-id').value.trim();
+    const sheetId = document.getElementById('input-sheet-id').value.trim();
+    if (!clientId || !sheetId) { toast('Ingresá el Client ID y el ID de tu Sheet', 'error'); return; }
+
+    setLoading(true, 'Conectando con Google Sheets…');
+    try {
+      await SheetsAPI.init(clientId, sheetId, CONFIG.CARGAS_SHEET_ID, CONFIG.CARGAS_TAB, CONFIG.PEDIDOS_TAB);
+      document.getElementById('modal-setup').style.display = 'none';
+      document.getElementById('btn-logout').style.display = 'inline-flex';
+      const badge = document.getElementById('user-badge');
+      const rol = SheetsAPI.canEdit() ? 'Editor' : 'Solo lectura';
+      badge.textContent = `${SheetsAPI.getUserName()} · ${rol}`;
+      badge.style.display = 'inline';
+      applyPermissions();
+      if (!SheetsAPI.canEditDetected()) {
+        toast('No se pudo confirmar tu permiso (Editor/Lector) — habilitá la Drive API en Google Cloud Console para que la detección sea exacta. Por ahora se asume Editor.', 'error');
+      }
+      toast('Conectado a Google Sheets', 'success');
+      await loadData();
+    } catch (e) {
+      toast('Error al conectar: ' + errMsg(e), 'error');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function logout() {
+    SheetsAPI.signOut();
+    document.getElementById('btn-logout').style.display = 'none';
+    document.getElementById('user-badge').style.display = 'none';
+    showSetup();
+    toast('Sesión cerrada');
+  }
+
+  // ── Loading ─────────────────────────────────────────────────────────────────
+  function setLoading(show, msg = '') {
+    const el = document.getElementById('loading-overlay');
+    el.style.display = show ? 'flex' : 'none';
+    if (msg) el.querySelector('p').textContent = msg;
+  }
+
+  // ── Tab navigation ──────────────────────────────────────────────────────────
+  function initTabs() {
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('pane-' + btn.dataset.tab).classList.add('active');
+        if (btn.dataset.tab === 'dashboard') renderDashboard();
+        if (btn.dataset.tab === 'historial') renderHistorial();
+        if (btn.dataset.tab === 'chequeo') renderChequeo();
+        if (btn.dataset.tab === 'clientes') renderClientes();
+      });
+    });
+  }
+
+  // ── Form: Devolución ────────────────────────────────────────────────────────
+  function initDevolucionForm() {
+    document.getElementById('dev-fecha').value = today();
+
+    document.getElementById('qty-minus').addEventListener('click', () => {
+      const input = document.getElementById('dev-cantidad');
+      input.value = Math.max(1, (parseInt(input.value) || 1) - 1);
+    });
+    document.getElementById('qty-plus').addEventListener('click', () => {
+      const input = document.getElementById('dev-cantidad');
+      input.value = (parseInt(input.value) || 0) + 1;
+    });
+
+    document.getElementById('form-devolucion').addEventListener('submit', async e => {
+      e.preventDefault();
+      if (!SheetsAPI.canEdit()) { toast('Tu cuenta tiene acceso de solo lectura, no podés registrar devoluciones', 'error'); return; }
+      const cliente = document.getElementById('dev-cliente').value.trim();
+      const cantidad = parseInt(document.getElementById('dev-cantidad').value);
+      const fecha = document.getElementById('dev-fecha').value;
+      if (!cliente) { toast('Ingresá el cliente', 'error'); return; }
+      if (!cantidad || cantidad <= 0) { toast('La cantidad debe ser mayor a 0', 'error'); return; }
+      if (!fecha) { toast('Ingresá la fecha', 'error'); return; }
+
+      const record = {
+        fecha,
+        cliente,
+        cantidad,
+        usuario: SheetsAPI.getUserName(),
+        observaciones: document.getElementById('dev-obs').value.trim()
+      };
+
+      setLoading(true, 'Guardando devolución…');
+      try {
+        await SheetsAPI.appendDevolucion(record);
+        toast(`Devolución guardada: ${cliente} devolvió ${cantidad} palet(s)`, 'success');
+        document.getElementById('form-devolucion').reset();
+        document.getElementById('dev-fecha').value = today();
+        document.getElementById('dev-cantidad').value = 1;
+        await loadData();
+      } catch (e) {
+        toast('Error al guardar: ' + errMsg(e), 'error');
+      } finally {
+        setLoading(false);
+      }
+    });
+  }
+
+  // ── Permisos (Editor/Lector nativos de Google Drive) ─────────────────────────
+  // "Registrar devolución" y "Clientes" (renombrar/excluir) son acciones de
+  // edición, se ocultan para quien solo tiene permiso de Lector en la Sheet.
+  function applyPermissions() {
+    const canEdit = SheetsAPI.canEdit();
+    ['registro', 'clientes'].forEach(tabName => {
+      const tabBtn = document.querySelector(`.tab-btn[data-tab="${tabName}"]`);
+      tabBtn.style.display = canEdit ? '' : 'none';
+      if (!canEdit && tabBtn.classList.contains('active')) {
+        tabBtn.classList.remove('active');
+        document.getElementById('pane-' + tabName).classList.remove('active');
+        document.querySelector('.tab-btn[data-tab="dashboard"]').classList.add('active');
+        document.getElementById('pane-dashboard').classList.add('active');
+      }
+    });
+  }
+
+  // ── Data loading ────────────────────────────────────────────────────────────
+  async function loadData() {
+    setLoading(true, 'Cargando datos…');
+    try {
+      [_cargas, _pedidos, _devoluciones, _clientesConfig] = await Promise.all([
+        SheetsAPI.readCargas(),
+        SheetsAPI.readPedidos(),
+        SheetsAPI.readDevoluciones(),
+        SheetsAPI.readClientesConfig()
+      ]);
+      _saldos = Saldos.calcSaldos(_cargas, _devoluciones, _clientesConfig);
+      _chequeo = Saldos.calcChequeo(_cargas, _pedidos, _clientesConfig);
+      _clientesEditables = Saldos.buildClientesEditables(_cargas, _pedidos, _clientesConfig);
+      populateClientesDatalist();
+      populateNombresCanonicosDatalist();
+      renderDashboard();
+      renderHistorial();
+      renderChequeo();
+      renderClientes();
+    } catch (e) {
+      toast('Error al cargar: ' + errMsg(e), 'error');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function populateClientesDatalist() {
+    const datalist = document.getElementById('lista-clientes');
+    datalist.innerHTML = '';
+    _saldos
+      .map(s => s.cliente)
+      .sort((a, b) => a.localeCompare(b))
+      .forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c;
+        datalist.appendChild(opt);
+      });
+  }
+
+  function populateNombresCanonicosDatalist() {
+    const datalist = document.getElementById('lista-nombres-canonicos');
+    datalist.innerHTML = '';
+    Saldos.buildNombresCanonicos(_clientesEditables).forEach(nombre => {
+      const opt = document.createElement('option');
+      opt.value = nombre;
+      datalist.appendChild(opt);
+    });
+  }
+
+  // ── Dashboard ───────────────────────────────────────────────────────────────
+  function renderDashboard() {
+    const totales = Saldos.calcTotales(_saldos);
+    if (!_saldos.length) {
+      document.getElementById('kpi-grid').innerHTML = '<p class="no-data">Sin datos todavía</p>';
+      document.getElementById('saldos-table').innerHTML = '<p class="no-data">Sin datos</p>';
+      return;
+    }
+
+    document.getElementById('kpi-grid').innerHTML = `
+      <div class="kpi-card"><span class="kpi-val">${totales.salidos}</span><span class="kpi-label">Palets salidos</span></div>
+      <div class="kpi-card"><span class="kpi-val">${totales.devueltos}</span><span class="kpi-label">Palets devueltos</span></div>
+      <div class="kpi-card ${totales.saldo > 0 ? 'bad' : 'good'}"><span class="kpi-val">${totales.saldo}</span><span class="kpi-label">Palets pendientes</span></div>
+      <div class="kpi-card"><span class="kpi-val">${totales.clientesConDeuda}</span><span class="kpi-label">Clientes con deuda</span></div>
+    `;
+
+    renderSaldosTable(document.getElementById('saldos-search').value.trim().toLowerCase());
+  }
+
+  function renderSaldosTable(filter = '') {
+    const rows = _saldos.filter(s => s.cliente.toLowerCase().includes(filter));
+    if (!rows.length) { document.getElementById('saldos-table').innerHTML = '<p class="no-data">Sin resultados</p>'; return; }
+
+    document.getElementById('saldos-table').innerHTML = `
+      <table>
+        <thead><tr><th>Cliente</th><th>Salidos</th><th>Devueltos</th><th>Saldo</th></tr></thead>
+        <tbody>${rows.map(s => `<tr>
+          <td>${escapeHtml(s.cliente)}</td>
+          <td>${s.salidos}</td>
+          <td>${s.devueltos}</td>
+          <td><span class="saldo-pill ${s.saldo > 0 ? 'debe' : 'aldia'}">${s.saldo > 0 ? s.saldo + ' debe' : 'Al día'}</span></td>
+        </tr>`).join('')}</tbody>
+      </table>`;
+  }
+
+  // ── Historial ───────────────────────────────────────────────────────────────
+  function renderHistorial(filter = '') {
+    const rows = _devoluciones
+      .filter(d => (d['Cliente'] || '').toLowerCase().includes(filter))
+      .slice()
+      .reverse();
+    if (!rows.length) { document.getElementById('historial-table').innerHTML = '<p class="no-data">Sin devoluciones registradas</p>'; return; }
+
+    document.getElementById('historial-table').innerHTML = `
+      <table>
+        <thead><tr><th>Fecha</th><th>Cliente</th><th>Cantidad</th><th>Usuario</th><th>Observaciones</th></tr></thead>
+        <tbody>${rows.map(d => `<tr>
+          <td>${escapeHtml(d['Fecha'])}</td>
+          <td>${escapeHtml(d['Cliente'])}</td>
+          <td>${escapeHtml(d['Cantidad'])}</td>
+          <td>${escapeHtml(d['Usuario'])}</td>
+          <td>${escapeHtml(d['Observaciones'])}</td>
+        </tr>`).join('')}</tbody>
+      </table>`;
+  }
+
+  // ── Chequeo: pedidos vs cargados ──────────────────────────────────────────────
+  function renderChequeo() {
+    if (!_chequeo.length) { document.getElementById('chequeo-table').innerHTML = '<p class="no-data">Sin datos</p>'; return; }
+
+    document.getElementById('chequeo-table').innerHTML = `
+      <table>
+        <thead><tr><th>Cliente</th><th>Palets pedidos</th><th>Palets cargados</th><th>Diferencia</th></tr></thead>
+        <tbody>${_chequeo.map(c => `<tr>
+          <td>${escapeHtml(c.cliente)}</td>
+          <td>${c.pedidos}</td>
+          <td>${c.cargados}</td>
+          <td><span class="diff-pill ${c.diferencia === 0 ? 'ok' : 'mismatch'}">${c.diferencia > 0 ? '+' : ''}${c.diferencia}</span></td>
+        </tr>`).join('')}</tbody>
+      </table>`;
+  }
+
+  // ── Clientes: renombrar / excluir ─────────────────────────────────────────────
+  // Ordenados por volumen de palets (buildClientesEditables ya los ordena así)
+  // para priorizar unificar primero los que más pesan. "Mostrar como" usa un
+  // datalist con los nombres canónicos ya en uso, para evitar crear una nueva
+  // variante por error en vez de unificar con una existente.
+  function renderClientes(filter = '') {
+    if (!_clientesEditables.length) { document.getElementById('clientes-table').innerHTML = '<p class="no-data">Sin datos</p>'; return; }
+
+    const rows = _clientesEditables
+      .map((c, i) => ({ ...c, idx: i }))
+      .filter(c => c.original.toLowerCase().includes(filter));
+
+    if (!rows.length) { document.getElementById('clientes-table').innerHTML = '<p class="no-data">Sin resultados</p>'; return; }
+
+    document.getElementById('clientes-table').innerHTML = `
+      <table class="clientes-table">
+        <thead><tr><th>Nombre original</th><th>Palets</th><th>Mostrar como</th><th>Excluir</th></tr></thead>
+        <tbody>${rows.map(c => `<tr data-idx="${c.idx}">
+          <td>${escapeHtml(c.original)}</td>
+          <td>${c.palets}</td>
+          <td><input type="text" class="cli-mostrar" list="lista-nombres-canonicos" value="${escapeHtml(c.mostrarComo)}" placeholder="${escapeHtml(c.original)}" /></td>
+          <td><input type="checkbox" class="cli-excluir" ${c.excluir ? 'checked' : ''} /></td>
+        </tr>`).join('')}</tbody>
+      </table>`;
+  }
+
+  async function guardarClientes() {
+    if (!SheetsAPI.canEdit()) { toast('Tu cuenta tiene acceso de solo lectura', 'error'); return; }
+    // Partimos de TODAS las filas (no solo las visibles si hay un filtro
+    // aplicado) y pisamos con lo editado, para no perder al guardar las
+    // filas que el buscador esté ocultando en este momento.
+    const list = _clientesEditables.map(c => ({ original: c.original, mostrarComo: c.mostrarComo, excluir: c.excluir }));
+    document.querySelectorAll('#clientes-table tbody tr').forEach(tr => {
+      const idx = parseInt(tr.dataset.idx, 10);
+      list[idx] = {
+        original: _clientesEditables[idx].original,
+        mostrarComo: tr.querySelector('.cli-mostrar').value.trim(),
+        excluir: tr.querySelector('.cli-excluir').checked
+      };
+    });
+
+    setLoading(true, 'Guardando clientes…');
+    try {
+      await SheetsAPI.saveClientesConfig(list);
+      toast('Cambios guardados', 'success');
+      await loadData();
+    } catch (e) {
+      toast('Error al guardar: ' + errMsg(e), 'error');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // ── Helpers ─────────────────────────────────────────────────────────────────
+  function today() {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str == null ? '' : String(str);
+    return div.innerHTML;
+  }
+
+  // ── Boot ────────────────────────────────────────────────────────────────────
+  function boot() {
+    initTabs();
+    initDevolucionForm();
+
+    document.getElementById('btn-connect').addEventListener('click', connectSheets);
+    document.getElementById('btn-logout').addEventListener('click', logout);
+    document.getElementById('btn-refresh').addEventListener('click', loadData);
+    document.getElementById('btn-settings').addEventListener('click', showSetup);
+    document.getElementById('modal-close').addEventListener('click', () => {
+      document.getElementById('modal-setup').style.display = 'none';
+    });
+    document.getElementById('saldos-search').addEventListener('input', e => renderSaldosTable(e.target.value.trim().toLowerCase()));
+    document.getElementById('historial-search').addEventListener('input', e => renderHistorial(e.target.value.trim().toLowerCase()));
+    document.getElementById('clientes-search').addEventListener('input', e => renderClientes(e.target.value.trim().toLowerCase()));
+    document.getElementById('btn-guardar-clientes').addEventListener('click', guardarClientes);
+
+    const savedClientId = localStorage.getItem('palets_clientId');
+    const savedSheetId = localStorage.getItem('palets_ownSheetId');
+    if (savedClientId && savedSheetId) {
+      document.getElementById('input-client-id').value = savedClientId;
+      document.getElementById('input-sheet-id').value = savedSheetId;
+      setTimeout(connectSheets, 300);
+    } else {
+      showSetup();
+    }
+  }
+
+  return { boot };
+})();
+
+// Wait for gapi + gsi to load, then boot
+window.onGapiLoaded = () => { window.gapiReady = true; tryBoot(); };
+window.onGsiLoaded = () => { window.gsiReady = true; tryBoot(); };
+function tryBoot() {
+  if (window.gapiReady && window.gsiReady) App.boot();
+}
