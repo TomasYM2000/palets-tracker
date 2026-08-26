@@ -164,6 +164,23 @@
 </div>
 
 <!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!-- MODAL "HOLA DE NUEVO" (ya tiene nombre guardado en este navegador)       -->
+<!-- Requiere un toque real para conectar — si se dispara solo, sin gesto    -->
+<!-- del usuario, el navegador (sobre todo en celular) bloquea el popup de   -->
+<!-- Google y la conexión queda colgada para siempre.                        -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-reconnect">
+  <div class="modal" style="position:relative">
+    <h2>🧱 ¡Hola de nuevo!</h2>
+    <p id="reconnect-nombre">Tocá para conectarte con Google y seguir.</p>
+    <div class="modal-footer">
+      <button id="btn-reconnect" class="btn-success" style="flex:1">🔗 Conectar con Google</button>
+    </div>
+    <p style="margin-top:1rem"><a href="#" id="link-no-soy-yo" style="font-size:.8rem;color:var(--text-muted)">No soy yo / cambiar nombre</a></p>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
 <!-- MODAL BIENVENIDA (solo la primera vez, en este navegador)                -->
 <!-- ══════════════════════════════════════════════════════════════════════════ -->
 <div class="modal-overlay" id="modal-welcome">
@@ -214,9 +231,9 @@
 <div id="toast-container"></div>
 
 <!-- ── Scripts ──────────────────────────────────────────────────────────────── -->
-<script src="sheets.js?v=12"></script>
-<script src="saldos.js?v=12"></script>
-<script src="app.js?v=12"></script>
+<script src="sheets.js?v=13"></script>
+<script src="saldos.js?v=13"></script>
+<script src="app.js?v=13"></script>
 <!-- Google APIs (loaded last, callbacks boot the app) -->
 <script src="https://apis.google.com/js/api.js?onload=onGapiLoaded" async defer></script>
 <script src="https://accounts.google.com/gsi/client" async defer onload="onGsiLoaded()"></script>

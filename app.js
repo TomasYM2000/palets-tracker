@@ -62,11 +62,34 @@ const App = (() => {
     document.getElementById('modal-guide').style.display = 'flex';
   }
 
+  function showReconnect() {
+    document.getElementById('reconnect-nombre').textContent = `Hola ${getDisplayName()}, tocá para conectarte con Google y seguir.`;
+    document.getElementById('modal-reconnect').style.display = 'flex';
+  }
+
+  // Si Google no responde en este lapso (ej. quedó esperando un popup
+  // bloqueado por el navegador), se corta en vez de dejar "Conectando…"
+  // colgado para siempre.
+  function withTimeout(promise, ms, msg) {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error(msg)), ms))
+    ]);
+  }
+
   // ── Auth & conexión (Client ID y Sheet ID ya son fijos, nadie los toca) ─────
+  // IMPORTANTE: connectSheets() tiene que dispararse siempre desde un toque
+  // real del usuario (click/submit), nunca solo al cargar la página — si no,
+  // el navegador (sobre todo en celular) bloquea el popup de login de Google
+  // en silencio y la conexión queda esperando para siempre.
   async function connectSheets() {
     setLoading(true, 'Conectando con Google Sheets…');
     try {
-      await SheetsAPI.init(CONFIG.CLIENT_ID, CONFIG.OWN_SHEET_ID, CONFIG.CARGAS_SHEET_ID, CONFIG.CARGAS_TAB, CONFIG.PEDIDOS_TAB);
+      await withTimeout(
+        SheetsAPI.init(CONFIG.CLIENT_ID, CONFIG.OWN_SHEET_ID, CONFIG.CARGAS_SHEET_ID, CONFIG.CARGAS_TAB, CONFIG.PEDIDOS_TAB),
+        20000,
+        'Tardó demasiado en responder. Puede que el navegador haya bloqueado la ventana de Google — probá de nuevo.'
+      );
       document.getElementById('btn-logout').style.display = 'inline-flex';
       const badge = document.getElementById('user-badge');
       const rol = SheetsAPI.canEdit() ? 'Editor' : 'Solo lectura';
@@ -85,6 +108,10 @@ const App = (() => {
       await loadData();
     } catch (e) {
       toast('Error al conectar: ' + errMsg(e), 'error');
+      // Dejamos una forma de reintentar con un toque, en vez de una pantalla
+      // muerta — reintentar directo acá adentro no sirve porque ya no
+      // estaríamos dentro de un gesto del usuario.
+      if (getDisplayName()) showReconnect();
     } finally {
       setLoading(false);
     }
@@ -422,8 +449,23 @@ const App = (() => {
     document.getElementById('clientes-search').addEventListener('input', e => renderClientes(e.target.value.trim().toLowerCase()));
     document.getElementById('btn-guardar-clientes').addEventListener('click', guardarClientes);
 
-    if (getDisplayName()) {
+    document.getElementById('btn-reconnect').addEventListener('click', () => {
+      document.getElementById('modal-reconnect').style.display = 'none';
       connectSheets();
+    });
+    document.getElementById('link-no-soy-yo').addEventListener('click', e => {
+      e.preventDefault();
+      document.getElementById('modal-reconnect').style.display = 'none';
+      localStorage.removeItem('palets_displayName');
+      localStorage.removeItem('palets_lastEmail');
+      showWelcome();
+    });
+
+    // No dispara la conexión sola: si ya hay un nombre guardado, pide un
+    // toque más (modal "Hola de nuevo") para que el pedido de login a
+    // Google salga de un gesto real del usuario y no lo bloquee el navegador.
+    if (getDisplayName()) {
+      showReconnect();
     } else {
       showWelcome();
     }
