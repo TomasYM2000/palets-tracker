@@ -12,7 +12,12 @@ const CONFIG = {
   // seguridad real. La protección real es (1) la lista de usuarios de
   // prueba en Google Cloud, que bloquea el login de cuentas no autorizadas,
   // y (2) los permisos de Editor/Lector del Sheets de devoluciones.
-  ACCESS_CODE: 'Belipel2026'
+  ACCESS_CODE: 'Belipel2026',
+  // Cuentas de Google que son "Maestro": las únicas que ven la pestaña
+  // "Clientes" (la única herramienta de la app que corrige datos ya
+  // cargados). El resto, aunque tenga permiso de Editor en el Sheets
+  // (necesario para poder registrar devoluciones), no la ve.
+  MAESTRO_EMAILS: ['tomasyaregui8@gmail.com']
 };
 
 const App = (() => {
@@ -58,6 +63,15 @@ const App = (() => {
     document.getElementById('modal-settings').style.display = 'flex';
   }
 
+  function isMaestro() {
+    return CONFIG.MAESTRO_EMAILS.includes(SheetsAPI.getUserEmail());
+  }
+
+  function rolLabel() {
+    if (isMaestro()) return 'Maestro';
+    return SheetsAPI.canEdit() ? 'Editor' : 'Solo lectura';
+  }
+
   function showGuide() {
     document.getElementById('modal-guide').style.display = 'flex';
   }
@@ -92,8 +106,7 @@ const App = (() => {
       );
       document.getElementById('btn-logout').style.display = 'inline-flex';
       const badge = document.getElementById('user-badge');
-      const rol = SheetsAPI.canEdit() ? 'Editor' : 'Solo lectura';
-      badge.textContent = `${getDisplayName()} · ${rol}`;
+      badge.textContent = `${getDisplayName()} · ${rolLabel()}`;
       badge.style.display = 'inline';
       applyPermissions();
       if (!SheetsAPI.canEditDetected()) {
@@ -203,12 +216,17 @@ const App = (() => {
   // ── Permisos (Editor/Lector nativos de Google Drive) ─────────────────────────
   // "Registrar devolución" y "Clientes" (renombrar/excluir) son acciones de
   // edición, se ocultan para quien solo tiene permiso de Lector en la Sheet.
+  // "Registrar devolución": para cualquiera con permiso de Editor en el
+  // Sheets (necesario para poder escribir). "Clientes" (la única pantalla
+  // que corrige/unifica datos ya cargados): solo para el Maestro.
   function applyPermissions() {
     const canEdit = SheetsAPI.canEdit();
-    ['registro', 'clientes'].forEach(tabName => {
+    const maestro = isMaestro();
+    const visibility = { registro: canEdit, clientes: maestro };
+    Object.entries(visibility).forEach(([tabName, visible]) => {
       const tabBtn = document.querySelector(`.tab-btn[data-tab="${tabName}"]`);
-      tabBtn.style.display = canEdit ? '' : 'none';
-      if (!canEdit && tabBtn.classList.contains('active')) {
+      tabBtn.style.display = visible ? '' : 'none';
+      if (!visible && tabBtn.classList.contains('active')) {
         tabBtn.classList.remove('active');
         document.getElementById('pane-' + tabName).classList.remove('active');
         document.querySelector('.tab-btn[data-tab="dashboard"]').classList.add('active');
@@ -365,7 +383,7 @@ const App = (() => {
   }
 
   async function guardarClientes() {
-    if (!SheetsAPI.canEdit()) { toast('Tu cuenta tiene acceso de solo lectura', 'error'); return; }
+    if (!isMaestro()) { toast('Solo el Maestro puede editar la configuración de clientes', 'error'); return; }
     // Partimos de TODAS las filas (no solo las visibles si hay un filtro
     // aplicado) y pisamos con lo editado, para no perder al guardar las
     // filas que el buscador esté ocultando en este momento.
@@ -438,8 +456,7 @@ const App = (() => {
       document.getElementById('modal-settings').style.display = 'none';
       const badge = document.getElementById('user-badge');
       if (badge.style.display !== 'none') {
-        const rol = SheetsAPI.canEdit() ? 'Editor' : 'Solo lectura';
-        badge.textContent = `${nombre} · ${rol}`;
+        badge.textContent = `${nombre} · ${rolLabel()}`;
       }
       toast('Nombre actualizado', 'success');
     });

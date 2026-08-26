@@ -184,6 +184,10 @@ const SheetsAPI = (() => {
     return (_userInfo && (_userInfo.name || _userInfo.email)) || 'Desconocido';
   }
 
+  function getUserEmail() {
+    return (_userInfo && _userInfo.email) || '';
+  }
+
   // ── Internal helpers ───────────────────────────────────────────────────────
   async function _getSheetsList(spreadsheetId) {
     const res = await gapi.client.sheets.spreadsheets.get({ spreadsheetId });
@@ -370,7 +374,7 @@ const SheetsAPI = (() => {
   function isReady() { return _gapiReady && _gsiReady; }
 
   return {
-    init, signOut, isReady, getUserName, canEdit, canEditDetected,
+    init, signOut, isReady, getUserName, getUserEmail, canEdit, canEditDetected,
     readCargas, readPedidos, readDevoluciones, appendDevolucion,
     readClientesConfig, saveClientesConfig, logAccess
   };

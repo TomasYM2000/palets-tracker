@@ -155,7 +155,7 @@
       <li><strong>🕘 Historial</strong> — todas las devoluciones registradas, quién las cargó y cuándo.</li>
       <li><strong>🔍 Chequeo</strong> — compara los palets pedidos contra los cargados, para detectar diferencias.</li>
       <li><strong>👥 Clientes</strong> — para unificar nombres repetidos o excluir filas que no son clientes reales (solo lo ven los Editores).</li>
-      <li><strong>Editor vs. Lector</strong> — si podés registrar devoluciones o solo ver los datos depende del permiso que te dieron en el Sheets, no es algo que elijas vos.</li>
+      <li><strong>Roles</strong> — <strong>Lector</strong>: solo ve los datos. <strong>Editor</strong>: además puede registrar devoluciones. <strong>Maestro</strong>: es quien administra, y es el único que ve "Clientes" para corregir/unificar nombres. Depende del permiso que te dieron, no es algo que elijas vos.</li>
     </ul>
     <div class="modal-footer">
       <button id="btn-guide-ok" class="btn-success" style="flex:1">Entendido</button>
@@ -231,9 +231,9 @@
 <div id="toast-container"></div>
 
 <!-- ── Scripts ──────────────────────────────────────────────────────────────── -->
-<script src="sheets.js?v=14"></script>
-<script src="saldos.js?v=14"></script>
-<script src="app.js?v=14"></script>
+<script src="sheets.js?v=15"></script>
+<script src="saldos.js?v=15"></script>
+<script src="app.js?v=15"></script>
 <!-- Google APIs (loaded last, callbacks boot the app) -->
 <script src="https://apis.google.com/js/api.js?onload=onGapiLoaded" async defer></script>
 <script src="https://accounts.google.com/gsi/client" async defer onload="onGsiLoaded()"></script>
