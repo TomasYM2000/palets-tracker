@@ -86,9 +86,10 @@ const SheetsAPI = (() => {
       async function afterAuth(accessToken) {
         await gapiClientReady;
         gapi.client.setToken({ access_token: accessToken });
-        await _fetchUserInfo(accessToken);
+        // userinfo y capabilities son independientes entre sí — en paralelo
+        // en vez de uno atrás del otro ahorra un viaje de red completo.
+        await Promise.all([_fetchUserInfo(accessToken), _fetchCanEdit()]);
         if (_userInfo && _userInfo.email) localStorage.setItem('palets_lastEmail', _userInfo.email);
-        await _fetchCanEdit();
         if (_canEdit) await _ensureOwnSheet();
       }
 
@@ -198,27 +199,27 @@ const SheetsAPI = (() => {
     return res.result.sheets.map(s => s.properties.title);
   }
 
+  // Solo hace falta chequear/escribir encabezados en las hojas RECIÉN
+  // creadas — las que ya existían de una conexión anterior ya los tienen
+  // (los pusimos nosotros mismos la primera vez). Evitar ese chequeo para
+  // las que ya existen ahorra 3 viajes de red en el caso normal (usuario
+  // que ya usó la app antes), que era la mayor parte de la demora al
+  // conectar.
   async function _ensureOwnSheet() {
     const existing = await _getSheetsList(_ownSheetId);
-    const missing = [OWN_SHEET_NAME, CLIENTES_SHEET_NAME, ACCESOS_SHEET_NAME].filter(n => !existing.includes(n));
-    if (missing.length) {
-      await gapi.client.sheets.spreadsheets.batchUpdate({
-        spreadsheetId: _ownSheetId,
-        resource: { requests: missing.map(title => ({ addSheet: { properties: { title } } })) }
-      });
-    }
-    const devData = await _readRange(_ownSheetId, `${OWN_SHEET_NAME}!A1:E1`, true);
-    if (!devData || !devData.length) {
-      await _writeRange(_ownSheetId, `${OWN_SHEET_NAME}!A1`, [OWN_HEADERS]);
-    }
-    const cliData = await _readRange(_ownSheetId, `${CLIENTES_SHEET_NAME}!A1:C1`, true);
-    if (!cliData || !cliData.length) {
-      await _writeRange(_ownSheetId, `${CLIENTES_SHEET_NAME}!A1`, [CLIENTES_HEADERS]);
-    }
-    const accData = await _readRange(_ownSheetId, `${ACCESOS_SHEET_NAME}!A1:D1`, true);
-    if (!accData || !accData.length) {
-      await _writeRange(_ownSheetId, `${ACCESOS_SHEET_NAME}!A1`, [ACCESOS_HEADERS]);
-    }
+    const specs = [
+      { name: OWN_SHEET_NAME, headers: OWN_HEADERS },
+      { name: CLIENTES_SHEET_NAME, headers: CLIENTES_HEADERS },
+      { name: ACCESOS_SHEET_NAME, headers: ACCESOS_HEADERS }
+    ];
+    const missing = specs.filter(s => !existing.includes(s.name));
+    if (!missing.length) return;
+
+    await gapi.client.sheets.spreadsheets.batchUpdate({
+      spreadsheetId: _ownSheetId,
+      resource: { requests: missing.map(s => ({ addSheet: { properties: { title: s.name } } })) }
+    });
+    await Promise.all(missing.map(s => _writeRange(_ownSheetId, `${s.name}!A1`, [s.headers])));
   }
 
   // Registra cada login en la hoja "Accesos" (Fecha, Nombre, Email, Rol).
