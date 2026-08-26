@@ -23,7 +23,10 @@ const SheetsAPI = (() => {
   // sessionStorage (no localStorage) además se borra solo al cerrar la
   // pestaña/navegador, así no queda una sesión "para siempre" en el equipo.
   const SESSION_TTL_MS = 15 * 60 * 1000;
-  const SESSION_KEY = 'palets_session';
+  // El sufijo "_v2" fuerza a descartar sesiones guardadas con el scope viejo
+  // (sin email) cuando se agregó userinfo.email — si no, un token guardado
+  // sin ese permiso se reusaría igual y el email seguiría viniendo vacío.
+  const SESSION_KEY = 'palets_session_v2';
 
   function _saveSession(clientId, ownSheetId, accessToken) {
     sessionStorage.setItem(SESSION_KEY, JSON.stringify({
@@ -95,6 +98,7 @@ const SheetsAPI = (() => {
           scope: [
             'https://www.googleapis.com/auth/spreadsheets',
             'https://www.googleapis.com/auth/userinfo.profile',
+            'https://www.googleapis.com/auth/userinfo.email',
             'https://www.googleapis.com/auth/drive.metadata.readonly'
           ].join(' '),
           callback: async (resp) => {

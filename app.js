@@ -64,7 +64,9 @@ const App = (() => {
   }
 
   function isMaestro() {
-    return CONFIG.MAESTRO_EMAILS.includes(SheetsAPI.getUserEmail());
+    const email = SheetsAPI.getUserEmail().trim().toLowerCase();
+    if (!email) return false;
+    return CONFIG.MAESTRO_EMAILS.some(m => m.trim().toLowerCase() === email);
   }
 
   function rolLabel() {
@@ -304,8 +306,16 @@ const App = (() => {
   }
 
   function renderSaldosTable(filter = '') {
-    const rows = _saldos.filter(s => s.cliente.toLowerCase().includes(filter));
-    if (!rows.length) { document.getElementById('saldos-table').innerHTML = '<p class="no-data">Sin resultados</p>'; return; }
+    const soloDeben = document.getElementById('saldos-solo-deben').checked;
+    const rows = _saldos
+      .filter(s => s.cliente.toLowerCase().includes(filter))
+      .filter(s => !soloDeben || s.saldo > 0);
+    if (!rows.length) {
+      document.getElementById('saldos-table').innerHTML = soloDeben
+        ? '<p class="no-data">Ningún cliente debe palets 🎉</p>'
+        : '<p class="no-data">Sin resultados</p>';
+      return;
+    }
 
     document.getElementById('saldos-table').innerHTML = `
       <table>
@@ -462,6 +472,7 @@ const App = (() => {
     });
 
     document.getElementById('saldos-search').addEventListener('input', e => renderSaldosTable(e.target.value.trim().toLowerCase()));
+    document.getElementById('saldos-solo-deben').addEventListener('change', () => renderSaldosTable(document.getElementById('saldos-search').value.trim().toLowerCase()));
     document.getElementById('historial-search').addEventListener('input', e => renderHistorial(e.target.value.trim().toLowerCase()));
     document.getElementById('clientes-search').addEventListener('input', e => renderClientes(e.target.value.trim().toLowerCase()));
     document.getElementById('btn-guardar-clientes').addEventListener('click', guardarClientes);

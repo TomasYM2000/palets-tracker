@@ -140,6 +140,8 @@ datalist { display: none; }
 .saldo-pill.aldia { background: #dcfce7; color: var(--success); }
 .search-box { margin-bottom: .75rem; }
 .search-box input { width: 100%; }
+.checkbox-inline { display: flex; align-items: center; gap: .5rem; font-size: .82rem; color: var(--text-muted); margin-bottom: .9rem; cursor: pointer; }
+.checkbox-inline input { width: auto; }
 .chequeo-note { color: var(--text-muted); font-size: .82rem; margin-bottom: 1rem; line-height: 1.5; }
 .diff-pill { display: inline-block; padding: .2rem .6rem; border-radius: 999px; font-weight: 700; font-size: .8rem; }
 .diff-pill.ok { background: #dcfce7; color: var(--success); }
