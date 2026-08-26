@@ -19,6 +19,7 @@
   </div>
   <div class="header-actions">
     <span id="user-badge"></span>
+    <button id="btn-guide" class="btn-ghost">❓</button>
     <button id="btn-refresh" class="btn-ghost">⟳</button>
     <button id="btn-settings" class="btn-ghost">⚙</button>
     <button id="btn-logout" class="btn-ghost btn-danger">Salir</button>
@@ -141,6 +142,28 @@
 </div>
 
 <!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!-- MODAL GUÍA DE USO                                                        -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-guide">
+  <div class="modal" style="position:relative">
+    <button class="modal-close" id="modal-guide-close">✕</button>
+    <h2>🧱 Cómo usar Palets Tracker</h2>
+    <p>Guía rápida de la app.</p>
+    <ul class="guide-list">
+      <li><strong>➕ Registrar devolución</strong> — cuando un cliente devuelve palets: elegís el cliente, ponés cuántos y guardás. Es la pantalla principal para usar desde el celular.</li>
+      <li><strong>📊 Saldos</strong> — cuánto le debe cada cliente en palets (lo que salió menos lo que devolvió).</li>
+      <li><strong>🕘 Historial</strong> — todas las devoluciones registradas, quién las cargó y cuándo.</li>
+      <li><strong>🔍 Chequeo</strong> — compara los palets pedidos contra los cargados, para detectar diferencias.</li>
+      <li><strong>👥 Clientes</strong> — para unificar nombres repetidos o excluir filas que no son clientes reales (solo lo ven los Editores).</li>
+      <li><strong>Editor vs. Lector</strong> — si podés registrar devoluciones o solo ver los datos depende del permiso que te dieron en el Sheets, no es algo que elijas vos.</li>
+    </ul>
+    <div class="modal-footer">
+      <button id="btn-guide-ok" class="btn-success" style="flex:1">Entendido</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
 <!-- MODAL BIENVENIDA (solo la primera vez, en este navegador)                -->
 <!-- ══════════════════════════════════════════════════════════════════════════ -->
 <div class="modal-overlay" id="modal-welcome">
@@ -191,9 +214,9 @@
 <div id="toast-container"></div>
 
 <!-- ── Scripts ──────────────────────────────────────────────────────────────── -->
-<script src="sheets.js?v=11"></script>
-<script src="saldos.js?v=11"></script>
-<script src="app.js?v=11"></script>
+<script src="sheets.js?v=12"></script>
+<script src="saldos.js?v=12"></script>
+<script src="app.js?v=12"></script>
 <!-- Google APIs (loaded last, callbacks boot the app) -->
 <script src="https://apis.google.com/js/api.js?onload=onGapiLoaded" async defer></script>
 <script src="https://accounts.google.com/gsi/client" async defer onload="onGsiLoaded()"></script>

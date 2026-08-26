@@ -47,7 +47,7 @@ header {
 .header-sub { font-size: .7rem; opacity: .75; }
 .header-actions { display: flex; gap: .4rem; align-items: center; flex-shrink: 0; }
 #last-sync { font-size: .7rem; opacity: .7; display: none; }
-#user-badge { font-size: .75rem; opacity: .9; display: none; }
+#user-badge { font-size: .75rem; opacity: .9; display: none; max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ── Buttons ───────────────────────────────────────────────────────────────── */
 button, .btn {
@@ -73,7 +73,7 @@ button[type="submit"]:hover { opacity: .92; }
 #btn-logout { display: none; }
 
 /* ── Tabs ──────────────────────────────────────────────────────────────────── */
-.tabs { display: flex; background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 1rem; gap: .25rem; overflow-x: auto; position: sticky; top: 56px; z-index: 90; }
+.tabs { display: flex; background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 1rem; gap: .25rem; overflow-x: auto; -webkit-overflow-scrolling: touch; position: sticky; top: 60px; z-index: 90; }
 .tab-btn {
   padding: .8rem 1rem; background: none; color: var(--text-muted);
   border: none; border-bottom: 3px solid transparent; border-radius: 0;
@@ -96,8 +96,11 @@ button[type="submit"]:hover { opacity: .92; }
 label { font-size: .78rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
 input, select, textarea {
   padding: .7rem .8rem; border: 1px solid var(--border); border-radius: 8px;
-  font-size: 1rem; color: var(--text); background: var(--bg);
+  /* 16px mínimo: por debajo de eso, iOS Safari hace zoom automático al
+     enfocar el campo y la página deja de entrar en la pantalla. */
+  font-size: 16px; color: var(--text); background: var(--bg);
   transition: border-color .15s, box-shadow .15s;
+  width: 100%;
 }
 input:focus, select:focus, textarea:focus {
   outline: none; border-color: var(--primary);
@@ -108,8 +111,8 @@ datalist { display: none; }
 
 /* Cantidad grande con +/- para uso a una mano en celular */
 .qty-control { display: flex; align-items: center; gap: .5rem; }
-.qty-control button { width: 48px; height: 48px; flex-shrink: 0; font-size: 1.4rem; justify-content: center; background: var(--bg); color: var(--accent); border: 1px solid var(--border); border-radius: 50%; }
-.qty-control input { text-align: center; font-size: 1.5rem; font-weight: 700; color: var(--accent); }
+.qty-control button { width: 44px; height: 44px; flex-shrink: 0; font-size: 1.4rem; justify-content: center; background: var(--bg); color: var(--accent); border: 1px solid var(--border); border-radius: 50%; padding: 0; }
+.qty-control input { flex: 1; min-width: 0; text-align: center; font-size: 1.3rem; font-weight: 700; color: var(--accent); }
 
 /* ── Dashboard ─────────────────────────────────────────────────────────────── */
 .dashboard-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; gap: .5rem; flex-wrap: wrap; }
@@ -160,6 +163,9 @@ datalist { display: none; }
 .setup-steps ol { padding-left: 1.25rem; }
 .setup-steps li { margin-bottom: .4rem; font-size: .82rem; color: var(--text-muted); }
 .setup-steps a { color: var(--accent); }
+.guide-list { list-style: none; display: flex; flex-direction: column; gap: .9rem; margin-bottom: .5rem; }
+.guide-list li { font-size: .85rem; color: var(--text-muted); line-height: 1.5; }
+.guide-list strong { color: var(--text); display: block; margin-bottom: .15rem; }
 
 /* ── Toast ─────────────────────────────────────────────────────────────────── */
 #toast-container { position: fixed; bottom: 1.5rem; right: 1.5rem; left: 1.5rem; z-index: 9999; display: flex; flex-direction: column; align-items: flex-end; gap: .5rem; pointer-events: none; }
@@ -185,12 +191,30 @@ datalist { display: none; }
 
 /* ── Responsive ────────────────────────────────────────────────────────────── */
 @media (max-width: 600px) {
+  header { padding: 0 .85rem; gap: .35rem; }
   .header-title { font-size: .82rem; }
   .header-sub { display: none; }
-  .tab-btn { padding: .7rem .8rem; font-size: .8rem; }
-  .form-grid { grid-template-columns: 1fr; }
-  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .header-actions { gap: .3rem; }
+  .header-actions button { padding: .45rem .6rem; }
+  #user-badge { max-width: 60px; }
+  .tabs { padding: 0 .5rem; }
+  .tab-btn { padding: .7rem .55rem; font-size: .75rem; }
+  .tab-pane { padding: .85rem; }
+  .form-card, .section-card { padding: 1rem; }
+  .form-grid { grid-template-columns: 1fr; gap: .75rem; }
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); gap: .6rem; }
+  .kpi-card { padding: .8rem 1rem; }
   .kpi-val { font-size: 1.3rem; }
   .section-card { overflow-x: auto; }
+  .section-card table { font-size: .8rem; }
+  .section-card th, .section-card td { padding: .5rem .5rem; }
+  .modal { padding: 1.25rem; }
+  .modal-footer { flex-direction: column; }
   #toast-container { left: .75rem; right: .75rem; bottom: .75rem; }
+}
+
+/* Celulares muy angostos (ej. iPhone SE, 375px o menos) */
+@media (max-width: 380px) {
+  .tab-btn { padding: .65rem .45rem; font-size: .7rem; }
+  .qty-control button { width: 40px; height: 40px; font-size: 1.2rem; }
 }

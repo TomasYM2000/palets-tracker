@@ -58,6 +58,10 @@ const App = (() => {
     document.getElementById('modal-settings').style.display = 'flex';
   }
 
+  function showGuide() {
+    document.getElementById('modal-guide').style.display = 'flex';
+  }
+
   // ── Auth & conexión (Client ID y Sheet ID ya son fijos, nadie los toca) ─────
   async function connectSheets() {
     setLoading(true, 'Conectando con Google Sheets…');
@@ -74,6 +78,10 @@ const App = (() => {
       }
       toast('Conectado a Google Sheets', 'success');
       SheetsAPI.logAccess(getDisplayName());
+      if (!localStorage.getItem('palets_sawGuide')) {
+        localStorage.setItem('palets_sawGuide', '1');
+        showGuide();
+      }
       await loadData();
     } catch (e) {
       toast('Error al conectar: ' + errMsg(e), 'error');
@@ -386,6 +394,13 @@ const App = (() => {
     document.getElementById('btn-logout').addEventListener('click', logout);
     document.getElementById('btn-refresh').addEventListener('click', loadData);
     document.getElementById('btn-settings').addEventListener('click', showSettings);
+    document.getElementById('btn-guide').addEventListener('click', showGuide);
+    document.getElementById('modal-guide-close').addEventListener('click', () => {
+      document.getElementById('modal-guide').style.display = 'none';
+    });
+    document.getElementById('btn-guide-ok').addEventListener('click', () => {
+      document.getElementById('modal-guide').style.display = 'none';
+    });
     document.getElementById('modal-settings-close').addEventListener('click', () => {
       document.getElementById('modal-settings').style.display = 'none';
     });
