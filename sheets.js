@@ -5,7 +5,7 @@ const SheetsAPI = (() => {
   const CLIENTES_SHEET_NAME = 'ClientesConfig';
   const CLIENTES_HEADERS = ['Original', 'MostrarComo', 'Excluir'];
   const ACCESOS_SHEET_NAME = 'Accesos';
-  const ACCESOS_HEADERS = ['Fecha', 'Nombre', 'Email', 'Rol'];
+  const ACCESOS_HEADERS = ['Fecha y hora', 'Nombre', 'Email', 'Rol'];
 
   let _ownSheetId = '';
   let _cargasSheetId = '';
