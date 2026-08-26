@@ -49,6 +49,12 @@ const SheetsAPI = (() => {
   }
 
   // ── Init ───────────────────────────────────────────────────────────────────
+  // CLAVE: el pedido de login a Google (requestAccessToken) tiene que salir
+  // SINCRÓNICAMENTE, en el mismo instante del click del usuario. Si primero
+  // esperamos a que cargue gapi.client (red, discovery docs), el navegador ya
+  // no lo considera parte de "un toque real" y bloquea el popup en silencio
+  // — la conexión queda esperando para siempre. Por eso gapi.client se carga
+  // en paralelo, y el pedido de token no lo espera.
   function init(clientId, ownSheetId, cargasSheetId, cargasTab, pedidosTab) {
     _ownSheetId = ownSheetId;
     _cargasSheetId = cargasSheetId;
@@ -57,7 +63,7 @@ const SheetsAPI = (() => {
     localStorage.setItem('palets_clientId', clientId);
     localStorage.setItem('palets_ownSheetId', ownSheetId);
 
-    return new Promise((resolve, reject) => {
+    const gapiClientReady = new Promise((resolve, reject) => {
       gapi.load('client', async () => {
         try {
           await gapi.client.init({
@@ -67,55 +73,64 @@ const SheetsAPI = (() => {
             ]
           });
           _gapiReady = true;
-          _gsiReady = true;
-
-          // Si hay un token de sesión propio (≤15 min) todavía válido, lo
-          // reusamos directo y evitamos volver a pasar por Google.
-          const savedToken = _loadValidSession(clientId, ownSheetId);
-          if (savedToken) {
-            gapi.client.setToken({ access_token: savedToken });
-            try {
-              await _fetchUserInfo(savedToken);
-              await _fetchCanEdit();
-              if (_canEdit) await _ensureOwnSheet();
-              resolve(true);
-              return;
-            } catch (e) {
-              // El token guardado dejó de servir (ej. Google lo revocó
-              // antes de los 15 min) — seguimos con el flujo normal.
-              _clearSession();
-            }
-          }
-
-          _tokenClient = google.accounts.oauth2.initTokenClient({
-            client_id: clientId,
-            scope: [
-              'https://www.googleapis.com/auth/spreadsheets',
-              'https://www.googleapis.com/auth/userinfo.profile',
-              'https://www.googleapis.com/auth/drive.metadata.readonly'
-            ].join(' '),
-            callback: async (resp) => {
-              if (resp.error) { reject(resp); return; }
-              try {
-                _saveSession(clientId, ownSheetId, resp.access_token);
-                await _fetchUserInfo(resp.access_token);
-                if (_userInfo && _userInfo.email) localStorage.setItem('palets_lastEmail', _userInfo.email);
-                await _fetchCanEdit();
-                if (_canEdit) await _ensureOwnSheet();
-                resolve(true);
-              } catch (e) { reject(e); }
-            }
-          });
-          // Sin "prompt: consent" fijo: Google solo vuelve a mostrar la
-          // pantalla de permisos si es la primera vez o si cambiaron los
-          // scopes pedidos; en reconexiones normales pasa directo.
-          // "login_hint" con el último email usado evita que, con varias
-          // cuentas de Google logueadas en el navegador, tenga que preguntar
-          // cuál usar cada vez.
-          const lastEmail = localStorage.getItem('palets_lastEmail');
-          _tokenClient.requestAccessToken(lastEmail ? { prompt: '', hint: lastEmail } : { prompt: '' });
+          resolve();
         } catch (e) { reject(e); }
       });
+    });
+    _gsiReady = true;
+
+    return new Promise((resolve, reject) => {
+      async function afterAuth(accessToken) {
+        await gapiClientReady;
+        gapi.client.setToken({ access_token: accessToken });
+        await _fetchUserInfo(accessToken);
+        if (_userInfo && _userInfo.email) localStorage.setItem('palets_lastEmail', _userInfo.email);
+        await _fetchCanEdit();
+        if (_canEdit) await _ensureOwnSheet();
+      }
+
+      function requestFreshToken() {
+        _tokenClient = google.accounts.oauth2.initTokenClient({
+          client_id: clientId,
+          scope: [
+            'https://www.googleapis.com/auth/spreadsheets',
+            'https://www.googleapis.com/auth/userinfo.profile',
+            'https://www.googleapis.com/auth/drive.metadata.readonly'
+          ].join(' '),
+          callback: async (resp) => {
+            if (resp.error) { reject(resp); return; }
+            try {
+              _saveSession(clientId, ownSheetId, resp.access_token);
+              await afterAuth(resp.access_token);
+              resolve(true);
+            } catch (e) { reject(e); }
+          }
+        });
+        // Sin "prompt: consent" fijo: Google solo vuelve a mostrar la
+        // pantalla de permisos si es la primera vez o si cambiaron los
+        // scopes pedidos; en reconexiones normales pasa directo.
+        // "login_hint" con el último email usado evita que, con varias
+        // cuentas de Google logueadas en el navegador, tenga que preguntar
+        // cuál usar cada vez.
+        const lastEmail = localStorage.getItem('palets_lastEmail');
+        _tokenClient.requestAccessToken(lastEmail ? { prompt: '', hint: lastEmail } : { prompt: '' });
+      }
+
+      // Si hay un token de sesión propio (≤15 min) todavía válido, lo
+      // reusamos directo (no hace falta popup, no hay problema de gesto).
+      const savedToken = _loadValidSession(clientId, ownSheetId);
+      if (savedToken) {
+        afterAuth(savedToken)
+          .then(() => resolve(true))
+          .catch(() => {
+            // El token guardado dejó de servir (ej. Google lo revocó antes
+            // de los 15 min) — pedimos uno nuevo.
+            _clearSession();
+            requestFreshToken();
+          });
+      } else {
+        requestFreshToken();
+      }
     });
   }
 
