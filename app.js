@@ -39,6 +39,24 @@ const App = (() => {
     try { return JSON.stringify(e); } catch { return String(e); }
   }
 
+  // El token de acceso de Google dura ~1 hora; si se vence con la app
+  // abierta, las llamadas a Sheets fallan con un error de autenticación
+  // (401/"invalid authentication credentials") en vez de un error de datos.
+  // Detectarlo evita mostrarle a la persona un mensaje técnico de Google —
+  // en cambio, la mandamos derecho a reconectar.
+  function isAuthError(e) {
+    const status = (e && e.status) || (e && e.result && e.result.error && e.result.error.code);
+    if (status === 401) return true;
+    const msg = errMsg(e).toLowerCase();
+    return msg.includes('invalid authentication credentials') || msg.includes('unauthenticated') || msg.includes('invalid credentials');
+  }
+
+  function handleAuthError() {
+    SheetsAPI.signOut();
+    toast('Tu sesión con Google venció — reconectá para seguir', 'error');
+    showReconnect();
+  }
+
   // ── Toast ───────────────────────────────────────────────────────────────────
   function toast(msg, type = 'info') {
     const el = document.createElement('div');
@@ -208,6 +226,7 @@ const App = (() => {
         document.getElementById('dev-cantidad').value = 1;
         await loadData();
       } catch (e) {
+        if (isAuthError(e)) { handleAuthError(); return; }
         toast('Error al guardar: ' + errMsg(e), 'error');
       } finally {
         setLoading(false);
@@ -257,6 +276,7 @@ const App = (() => {
       renderChequeo();
       renderClientes();
     } catch (e) {
+      if (isAuthError(e)) { handleAuthError(); return; }
       toast('Error al cargar: ' + errMsg(e), 'error');
     } finally {
       setLoading(false);
