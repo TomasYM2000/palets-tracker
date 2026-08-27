@@ -4,9 +4,11 @@
 const CONFIG = {
   CLIENT_ID: '256488140515-6imleh7dn02li22va3l5466eg37o1nie.apps.googleusercontent.com',
   OWN_SHEET_ID: '1IYXnocNrVX2NveS9arK7uIP3QKagKrXhWqeMzFvpPJE',
-  CARGAS_SHEET_ID: '13w33rmB7HmSMushiFdt7kwJZJoSsietlBmqs23-JUCQ',
-  CARGAS_TAB: 'Cargas',
-  PEDIDOS_TAB: 'PEDIDOS',
+  // Apps Script publicado por el dueño (corre con SU permiso) que lee
+  // "Cargas"/"PEDIDOS" del Sheets de administración — así nadie más
+  // necesita tener ese Sheets compartido para poder usar la app.
+  CARGAS_PROXY_URL: 'https://script.google.com/macros/s/AKfycbx2f6rJywltkn14iR9SdiYxLrm9rUEIL1mbQYqzEE8-5mQMEo4BPwDAg9Y7Uo1OBgI5Pg/exec',
+  CARGAS_PROXY_KEY: '8a6fd2c61395a6736c8ce1ab3f9ed32e9ad9ee06c8cf15a6',
   // Ojo: esto es visible para cualquiera que mire el código fuente de la
   // página — es un filtro liviano contra curiosos, NO una barrera de
   // seguridad real. La protección real es (1) la lista de usuarios de
@@ -120,7 +122,7 @@ const App = (() => {
     setLoading(true, 'Conectando con Google Sheets…');
     try {
       await withTimeout(
-        SheetsAPI.init(CONFIG.CLIENT_ID, CONFIG.OWN_SHEET_ID, CONFIG.CARGAS_SHEET_ID, CONFIG.CARGAS_TAB, CONFIG.PEDIDOS_TAB),
+        SheetsAPI.init(CONFIG.CLIENT_ID, CONFIG.OWN_SHEET_ID, CONFIG.CARGAS_PROXY_URL, CONFIG.CARGAS_PROXY_KEY),
         20000,
         'Tardó demasiado en responder. Puede que el navegador haya bloqueado la ventana de Google — probá de nuevo.'
       );

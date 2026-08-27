@@ -8,9 +8,8 @@ const SheetsAPI = (() => {
   const ACCESOS_HEADERS = ['Fecha y hora', 'Nombre', 'Email', 'Rol'];
 
   let _ownSheetId = '';
-  let _cargasSheetId = '';
-  let _cargasTab = 'Cargas';
-  let _pedidosTab = 'PEDIDOS';
+  let _cargasProxyUrl = '';
+  let _cargasProxyKey = '';
   let _tokenClient = null;
   let _gapiReady = false;
   let _gsiReady = false;
@@ -58,11 +57,10 @@ const SheetsAPI = (() => {
   // no lo considera parte de "un toque real" y bloquea el popup en silencio
   // — la conexión queda esperando para siempre. Por eso gapi.client se carga
   // en paralelo, y el pedido de token no lo espera.
-  function init(clientId, ownSheetId, cargasSheetId, cargasTab, pedidosTab) {
+  function init(clientId, ownSheetId, cargasProxyUrl, cargasProxyKey) {
     _ownSheetId = ownSheetId;
-    _cargasSheetId = cargasSheetId;
-    _cargasTab = cargasTab || 'Cargas';
-    _pedidosTab = pedidosTab || 'PEDIDOS';
+    _cargasProxyUrl = cargasProxyUrl;
+    _cargasProxyKey = cargasProxyKey;
     localStorage.setItem('palets_clientId', clientId);
     localStorage.setItem('palets_ownSheetId', ownSheetId);
 
@@ -313,17 +311,38 @@ const SheetsAPI = (() => {
     return idx;
   }
 
-  // ── Público: Cargas (solo lectura, sheet de administración) ─────────────────
-  // Sin caché: es la fuente de la verdad de palets salidos y cambia seguido
-  // en el Sheets de administración, tiene que reflejarse apenas se sincroniza.
-  async function readCargas() {
-    const rows = await _readRange(_cargasSheetId, `${_cargasTab}!A1:ZZ`, true);
+  // ── Cargas/Pedidos vía proxy (Apps Script, corre con el permiso del dueño) ───
+  // Así nadie más necesita acceso al Sheets de administración: el script lo
+  // lee con el permiso de quien lo publicó. Una sola llamada HTTP trae los
+  // dos ("Cargas" y "PEDIDOS") — se comparte entre readCargas/readPedidos
+  // si se piden casi al mismo tiempo (como hace loadData con Promise.all),
+  // para no duplicar el pedido de red.
+  let _adminDataPromise = null;
+  async function _fetchAdminData() {
+    if (_adminDataPromise) return _adminDataPromise;
+    _adminDataPromise = fetch(`${_cargasProxyUrl}?key=${encodeURIComponent(_cargasProxyKey)}`)
+      .then(res => {
+        if (!res.ok) throw new Error('El proxy de Cargas respondió ' + res.status);
+        return res.json();
+      })
+      .then(data => {
+        if (data.error) throw new Error('Proxy de Cargas: ' + data.error);
+        return data;
+      });
+    try {
+      return await _adminDataPromise;
+    } finally {
+      _adminDataPromise = null;
+    }
+  }
+
+  function _parseCargasRows(rows) {
     if (!rows || rows.length < 2) return [];
     const headers = rows[0].map(h => (h || '').toString().trim());
     const idxCliente = _findHeader(headers, ['cliente']);
     const idxPalets = _findHeader(headers, ['palets', 'palet']);
-    if (idxCliente === -1) throw new Error(`No se encontró la columna "CLIENTE" en la hoja "${_cargasTab}"`);
-    if (idxPalets === -1) throw new Error(`No se encontró la columna "Palets" en la hoja "${_cargasTab}". Agregala primero.`);
+    if (idxCliente === -1) throw new Error('No se encontró la columna "CLIENTE" en la hoja "Cargas"');
+    if (idxPalets === -1) throw new Error('No se encontró la columna "Palets" en la hoja "Cargas". Agregala primero.');
 
     return rows.slice(1)
       .map(row => ({
@@ -333,14 +352,12 @@ const SheetsAPI = (() => {
       .filter(r => r.cliente);
   }
 
-  // ── Público: Pedidos (solo lectura, sheet de administración) ─────────────────
-  async function readPedidos() {
-    const rows = await _readRange(_cargasSheetId, `${_pedidosTab}!A1:ZZ`, true);
+  function _parsePedidosRows(rows) {
     if (!rows || rows.length < 2) return [];
     const headers = rows[0].map(h => (h || '').toString().trim());
     const idxCliente = _findHeader(headers, ['cliente']);
     const idxObs = _findHeader(headers, ['observaciones']);
-    if (idxCliente === -1) throw new Error(`No se encontró la columna "CLIENTE" en la hoja "${_pedidosTab}"`);
+    if (idxCliente === -1) throw new Error('No se encontró la columna "CLIENTE" en la hoja "PEDIDOS"');
 
     return rows.slice(1)
       .map(row => ({
@@ -348,6 +365,16 @@ const SheetsAPI = (() => {
         observaciones: idxObs === -1 ? '' : (row[idxObs] || '').toString()
       }))
       .filter(r => r.cliente);
+  }
+
+  async function readCargas() {
+    const data = await _fetchAdminData();
+    return _parseCargasRows(data.cargas);
+  }
+
+  async function readPedidos() {
+    const data = await _fetchAdminData();
+    return _parsePedidosRows(data.pedidos);
   }
 
   // ── Público: Config de clientes (propio — unifica nombres / excluye) ─────────
