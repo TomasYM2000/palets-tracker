@@ -9,7 +9,7 @@ const SheetsAPI = (() => {
 
   let _ownSheetId = '';
   let _cargasProxyUrl = '';
-  let _cargasProxyKey = '';
+  let _accessToken = '';
   let _tokenClient = null;
   let _gapiReady = false;
   let _gsiReady = false;
@@ -57,10 +57,9 @@ const SheetsAPI = (() => {
   // no lo considera parte de "un toque real" y bloquea el popup en silencio
   // — la conexión queda esperando para siempre. Por eso gapi.client se carga
   // en paralelo, y el pedido de token no lo espera.
-  function init(clientId, ownSheetId, cargasProxyUrl, cargasProxyKey) {
+  function init(clientId, ownSheetId, cargasProxyUrl) {
     _ownSheetId = ownSheetId;
     _cargasProxyUrl = cargasProxyUrl;
-    _cargasProxyKey = cargasProxyKey;
     localStorage.setItem('palets_clientId', clientId);
     localStorage.setItem('palets_ownSheetId', ownSheetId);
 
@@ -83,6 +82,7 @@ const SheetsAPI = (() => {
     return new Promise((resolve, reject) => {
       async function afterAuth(accessToken) {
         await gapiClientReady;
+        _accessToken = accessToken;
         gapi.client.setToken({ access_token: accessToken });
         // userinfo y capabilities son independientes entre sí — en paralelo
         // en vez de uno atrás del otro ahorra un viaje de red completo.
@@ -320,7 +320,11 @@ const SheetsAPI = (() => {
   let _adminDataPromise = null;
   async function _fetchAdminData() {
     if (_adminDataPromise) return _adminDataPromise;
-    _adminDataPromise = fetch(`${_cargasProxyUrl}?key=${encodeURIComponent(_cargasProxyKey)}`)
+    // Mandamos el token de acceso de Google de la persona logueada — el
+    // proxy lo valida contra Google y chequea que esté compartida en el
+    // Sheets de devoluciones, en vez de confiar en una clave fija que
+    // cualquiera podría copiar del código fuente.
+    _adminDataPromise = fetch(`${_cargasProxyUrl}?token=${encodeURIComponent(_accessToken)}`)
       .then(res => {
         if (!res.ok) throw new Error('El proxy de Cargas respondió ' + res.status);
         return res.json();
