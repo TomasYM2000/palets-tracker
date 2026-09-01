@@ -330,7 +330,7 @@ const SheetsAPI = (() => {
         return res.json();
       })
       .then(data => {
-        if (data.error) throw new Error('Proxy de Cargas: ' + data.error);
+        if (data.error) throw new Error('Proxy de Cargas: ' + data.error + (data.reason ? ' (' + data.reason + ')' : ''));
         return data;
       });
     try {
