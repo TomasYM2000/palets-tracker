@@ -9,7 +9,11 @@ const CONFIG = {
   // necesita tener ese Sheets compartido para poder usar la app. Verifica
   // el token de Google de quien pregunta (contra el Sheets de devoluciones,
   // no con una clave fija), así que no depende de ningún secreto en el código.
-  CARGAS_PROXY_URL: 'https://script.google.com/macros/s/AKfycbx2f6rJywltkn14iR9SdiYxLrm9rUEIL1mbQYqzEE8-5mQMEo4BPwDAg9Y7Uo1OBgI5Pg/exec',
+  // (2026-09-01) Proyecto de Apps Script propio y separado del que usa
+  // produccion-tracker — antes compartían el mismo script/URL, y cuando
+  // produccion-tracker cambió su lógica a Firebase (auth distinta), rompió
+  // el proxy para todos los usuarios de palets-tracker que no eran el dueño.
+  CARGAS_PROXY_URL: 'https://script.google.com/macros/s/AKfycbwxPja4xL8lDXkMNBI5wsgCWu_Ut_uUib9IVf-iOmtAl-lglqO4ltO_TVBLPhoR-wI6Zg/exec',
   // Ojo: esto es visible para cualquiera que mire el código fuente de la
   // página — es un filtro liviano contra curiosos, NO una barrera de
   // seguridad real. La protección real es (1) la lista de usuarios de
