@@ -62,8 +62,11 @@ const Saldos = (() => {
     return Array.from(nombres).sort((a, b) => a.localeCompare(b));
   }
 
-  // ── Saldos por cliente (Cargas − Devoluciones) ────────────────────────────────
-  function calcSaldos(cargas, devoluciones, clientesConfig) {
+  // ── Saldos por cliente (Cargas + Salidas manuales − Devoluciones) ─────────────
+  // "salidasManuales" son deudas cargadas a mano desde la app (misma forma de
+  // fila que Devoluciones: Cliente/Cantidad) para clientes/entregas que
+  // todavía no están en la hoja "Cargas" del administrador.
+  function calcSaldos(cargas, devoluciones, clientesConfig, salidasManuales) {
     const configMap = buildConfigMap(clientesConfig);
     const porCliente = {};
 
@@ -72,6 +75,15 @@ const Saldos = (() => {
       if (!nombre) return; // excluido
       if (!porCliente[nombre]) porCliente[nombre] = { cliente: nombre, salidos: 0, devueltos: 0 };
       porCliente[nombre].salidos += c.palets;
+    });
+
+    (salidasManuales || []).forEach(s => {
+      const raw = (s['Cliente'] || '').trim();
+      if (!raw) return;
+      const nombre = resolveCliente(raw, configMap);
+      if (!nombre) return;
+      if (!porCliente[nombre]) porCliente[nombre] = { cliente: nombre, salidos: 0, devueltos: 0 };
+      porCliente[nombre].salidos += parseFloat(s['Cantidad']) || 0;
     });
 
     devoluciones.forEach(d => {

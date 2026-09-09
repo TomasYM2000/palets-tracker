@@ -2,6 +2,11 @@
 const SheetsAPI = (() => {
   const OWN_SHEET_NAME = 'Devoluciones';
   const OWN_HEADERS = ['Fecha', 'Cliente', 'Cantidad', 'Usuario', 'Observaciones'];
+  // "Salidas": deuda cargada a mano desde la app (palets que se le entregaron
+  // a un cliente y todavía no figuran en la hoja "Cargas" del administrador).
+  // Mismas columnas que Devoluciones, pero suman al saldo en vez de restar.
+  const SALIDAS_SHEET_NAME = 'Salidas';
+  const SALIDAS_HEADERS = ['Fecha', 'Cliente', 'Cantidad', 'Usuario', 'Observaciones'];
   const CLIENTES_SHEET_NAME = 'ClientesConfig';
   const CLIENTES_HEADERS = ['Original', 'MostrarComo', 'Excluir'];
   const ACCESOS_SHEET_NAME = 'Accesos';
@@ -207,6 +212,7 @@ const SheetsAPI = (() => {
     const existing = await _getSheetsList(_ownSheetId);
     const specs = [
       { name: OWN_SHEET_NAME, headers: OWN_HEADERS },
+      { name: SALIDAS_SHEET_NAME, headers: SALIDAS_HEADERS },
       { name: CLIENTES_SHEET_NAME, headers: CLIENTES_HEADERS },
       { name: ACCESOS_SHEET_NAME, headers: ACCESOS_HEADERS }
     ];
@@ -407,11 +413,23 @@ const SheetsAPI = (() => {
     return _writeRange(_ownSheetId, `${OWN_SHEET_NAME}!A1`, [row]);
   }
 
+  // ── Público: Salidas manuales (deuda cargada a mano, propio) ────────────────
+  async function readSalidas() {
+    const rows = await _readRangeOrEmpty(_ownSheetId, `${SALIDAS_SHEET_NAME}!A:E`);
+    return _rowsToObjects(rows);
+  }
+
+  async function appendSalida(record) {
+    const row = [record.fecha, record.cliente, record.cantidad, record.usuario, record.observaciones || ''];
+    return _writeRange(_ownSheetId, `${SALIDAS_SHEET_NAME}!A1`, [row]);
+  }
+
   function isReady() { return _gapiReady && _gsiReady; }
 
   return {
     init, signOut, isReady, getUserName, getUserEmail, canEdit, canEditDetected,
     readCargas, readPedidos, readDevoluciones, appendDevolucion,
+    readSalidas, appendSalida,
     readClientesConfig, saveClientesConfig, logAccess
   };
 })();

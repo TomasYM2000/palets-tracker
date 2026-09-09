@@ -14,12 +14,6 @@ const CONFIG = {
   // produccion-tracker cambió su lógica a Firebase (auth distinta), rompió
   // el proxy para todos los usuarios de palets-tracker que no eran el dueño.
   CARGAS_PROXY_URL: 'https://script.google.com/macros/s/AKfycbwxPja4xL8lDXkMNBI5wsgCWu_Ut_uUib9IVf-iOmtAl-lglqO4ltO_TVBLPhoR-wI6Zg/exec',
-  // Ojo: esto es visible para cualquiera que mire el código fuente de la
-  // página — es un filtro liviano contra curiosos, NO una barrera de
-  // seguridad real. La protección real es (1) la lista de usuarios de
-  // prueba en Google Cloud, que bloquea el login de cuentas no autorizadas,
-  // y (2) los permisos de Editor/Lector del Sheets de devoluciones.
-  ACCESS_CODE: 'Belipel2026',
   // Cuentas de Google que son "Maestro": las únicas que ven la pestaña
   // "Clientes" (la única herramienta de la app que corrige datos ya
   // cargados). El resto, aunque tenga permiso de Editor en el Sheets
@@ -31,6 +25,7 @@ const App = (() => {
   let _cargas = [];
   let _pedidos = [];
   let _devoluciones = [];
+  let _salidasManual = [];
   let _clientesConfig = [];
   let _saldos = [];
   let _chequeo = [];
@@ -193,9 +188,48 @@ const App = (() => {
     });
   }
 
-  // ── Form: Devolución ────────────────────────────────────────────────────────
+  // ── Form: Devolución / Salida (deuda cargada a mano) ─────────────────────────
+  // Un mismo formulario para los dos movimientos: "devolución" (el cliente
+  // devuelve palets, resta del saldo) y "salida" (se le entregaron palets que
+  // todavía no están en la hoja "Cargas" del administrador, suma al saldo).
+  let _tipoRegistro = 'devolucion';
+
+  const TIPO_TEXTOS = {
+    devolucion: {
+      titulo: '➕ Registrar devolución de palets',
+      cantidadLabel: 'Cantidad de palets devueltos',
+      submit: '💾 Guardar devolución',
+      guardando: 'Guardando devolución…',
+      exito: (cliente, cantidad) => `Devolución guardada: ${cliente} devolvió ${cantidad} palet(s)`,
+      soloLectura: 'Tu cuenta tiene acceso de solo lectura, no podés registrar devoluciones'
+    },
+    salida: {
+      titulo: '📤 Registrar deuda (palets entregados)',
+      cantidadLabel: 'Cantidad de palets entregados',
+      submit: '💾 Guardar deuda',
+      guardando: 'Guardando deuda…',
+      exito: (cliente, cantidad) => `Deuda guardada: ${cliente} debe ${cantidad} palet(s) más`,
+      soloLectura: 'Tu cuenta tiene acceso de solo lectura, no podés registrar deudas'
+    }
+  };
+
+  function setTipoRegistro(tipo) {
+    _tipoRegistro = tipo;
+    const textos = TIPO_TEXTOS[tipo];
+    document.getElementById('registro-titulo').textContent = textos.titulo;
+    document.getElementById('registro-cantidad-label').textContent = textos.cantidadLabel;
+    document.getElementById('registro-submit').textContent = textos.submit;
+    document.querySelectorAll('.type-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.tipo === tipo);
+    });
+  }
+
   function initDevolucionForm() {
     document.getElementById('dev-fecha').value = today();
+
+    document.querySelectorAll('.type-btn').forEach(btn => {
+      btn.addEventListener('click', () => setTipoRegistro(btn.dataset.tipo));
+    });
 
     document.getElementById('qty-minus').addEventListener('click', () => {
       const input = document.getElementById('dev-cantidad');
@@ -208,7 +242,8 @@ const App = (() => {
 
     document.getElementById('form-devolucion').addEventListener('submit', async e => {
       e.preventDefault();
-      if (!SheetsAPI.canEdit()) { toast('Tu cuenta tiene acceso de solo lectura, no podés registrar devoluciones', 'error'); return; }
+      const textos = TIPO_TEXTOS[_tipoRegistro];
+      if (!SheetsAPI.canEdit()) { toast(textos.soloLectura, 'error'); return; }
       const cliente = document.getElementById('dev-cliente').value.trim();
       const cantidad = parseInt(document.getElementById('dev-cantidad').value);
       const fecha = document.getElementById('dev-fecha').value;
@@ -224,10 +259,14 @@ const App = (() => {
         observaciones: document.getElementById('dev-obs').value.trim()
       };
 
-      setLoading(true, 'Guardando devolución…');
+      setLoading(true, textos.guardando);
       try {
-        await SheetsAPI.appendDevolucion(record);
-        toast(`Devolución guardada: ${cliente} devolvió ${cantidad} palet(s)`, 'success');
+        if (_tipoRegistro === 'salida') {
+          await SheetsAPI.appendSalida(record);
+        } else {
+          await SheetsAPI.appendDevolucion(record);
+        }
+        toast(textos.exito(cliente, cantidad), 'success');
         document.getElementById('form-devolucion').reset();
         document.getElementById('dev-fecha').value = today();
         document.getElementById('dev-cantidad').value = 1;
@@ -267,13 +306,14 @@ const App = (() => {
   async function loadData() {
     setLoading(true, 'Cargando datos…');
     try {
-      [_cargas, _pedidos, _devoluciones, _clientesConfig] = await Promise.all([
+      [_cargas, _pedidos, _devoluciones, _salidasManual, _clientesConfig] = await Promise.all([
         SheetsAPI.readCargas(),
         SheetsAPI.readPedidos(),
         SheetsAPI.readDevoluciones(),
+        SheetsAPI.readSalidas(),
         SheetsAPI.readClientesConfig()
       ]);
-      _saldos = Saldos.calcSaldos(_cargas, _devoluciones, _clientesConfig);
+      _saldos = Saldos.calcSaldos(_cargas, _devoluciones, _clientesConfig, _salidasManual);
       _chequeo = Saldos.calcChequeo(_cargas, _pedidos, _clientesConfig);
       _clientesEditables = Saldos.buildClientesEditables(_cargas, _pedidos, _clientesConfig);
       populateClientesDatalist();
@@ -357,18 +397,23 @@ const App = (() => {
   }
 
   // ── Historial ───────────────────────────────────────────────────────────────
+  // Junta devoluciones (restan saldo) y salidas manuales (suman saldo, "debe")
+  // en una sola lista, distinguidas por la columna Tipo.
   function renderHistorial(filter = '') {
-    const rows = _devoluciones
+    const rows = [
+      ..._devoluciones.map(d => ({ ...d, _tipo: 'devolucion' })),
+      ..._salidasManual.map(s => ({ ...s, _tipo: 'salida' }))
+    ]
       .filter(d => (d['Cliente'] || '').toLowerCase().includes(filter))
-      .slice()
       .reverse();
-    if (!rows.length) { document.getElementById('historial-table').innerHTML = '<p class="no-data">Sin devoluciones registradas</p>'; return; }
+    if (!rows.length) { document.getElementById('historial-table').innerHTML = '<p class="no-data">Sin movimientos registrados</p>'; return; }
 
     document.getElementById('historial-table').innerHTML = `
       <table>
-        <thead><tr><th>Fecha</th><th>Cliente</th><th>Cantidad</th><th>Usuario</th><th>Observaciones</th></tr></thead>
+        <thead><tr><th>Fecha</th><th>Tipo</th><th>Cliente</th><th>Cantidad</th><th>Usuario</th><th>Observaciones</th></tr></thead>
         <tbody>${rows.map(d => `<tr>
           <td>${escapeHtml(d['Fecha'])}</td>
+          <td><span class="tipo-pill ${d._tipo}">${d._tipo === 'salida' ? 'Debe' : 'Devolución'}</span></td>
           <td>${escapeHtml(d['Cliente'])}</td>
           <td>${escapeHtml(d['Cantidad'])}</td>
           <td>${escapeHtml(d['Usuario'])}</td>
@@ -465,9 +510,7 @@ const App = (() => {
     document.getElementById('form-welcome').addEventListener('submit', e => {
       e.preventDefault();
       const nombre = document.getElementById('input-nombre').value.trim();
-      const codigo = document.getElementById('input-codigo').value;
       if (!nombre) return;
-      if (codigo !== CONFIG.ACCESS_CODE) { toast('Código de acceso incorrecto', 'error'); return; }
       localStorage.setItem('palets_displayName', nombre);
       document.getElementById('modal-welcome').style.display = 'none';
       connectSheets();

@@ -109,6 +109,12 @@ input:focus, select:focus, textarea:focus {
 textarea { resize: vertical; min-height: 60px; }
 datalist { display: none; }
 
+/* Selector Devolución / Debe (salida manual) */
+.type-toggle { display: flex; gap: .4rem; background: var(--bg); padding: .3rem; border-radius: 12px; margin-bottom: 1.25rem; }
+.type-btn { flex: 1; justify-content: center; background: transparent; color: var(--text-muted); border-radius: 9px; padding: .6rem .5rem; font-size: .82rem; }
+.type-btn.active { background: var(--surface); color: var(--accent); box-shadow: 0 2px 6px rgba(23,21,31,.1); }
+.type-btn.active[data-tipo="salida"] { color: var(--warn); }
+
 /* Cantidad grande con +/- para uso a una mano en celular */
 .qty-control { display: flex; align-items: center; gap: .5rem; }
 .qty-control button { width: 44px; height: 44px; flex-shrink: 0; font-size: 1.4rem; justify-content: center; background: var(--bg); color: var(--accent); border: 1px solid var(--border); border-radius: 50%; padding: 0; }
@@ -146,6 +152,9 @@ datalist { display: none; }
 .diff-pill { display: inline-block; padding: .2rem .6rem; border-radius: 999px; font-weight: 700; font-size: .8rem; }
 .diff-pill.ok { background: #dcfce7; color: var(--success); }
 .diff-pill.mismatch { background: #f3e8fb; color: var(--accent); }
+.tipo-pill { display: inline-block; padding: .2rem .6rem; border-radius: 999px; font-weight: 700; font-size: .75rem; }
+.tipo-pill.devolucion { background: #dcfce7; color: var(--success); }
+.tipo-pill.salida { background: #fef3c7; color: var(--warn); }
 .clientes-table input[type="text"] { min-width: 140px; }
 .clientes-table td { vertical-align: middle; }
 
