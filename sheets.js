@@ -288,12 +288,57 @@ const SheetsAPI = (() => {
     });
   }
 
+  // Sobrescribe una fila puntual (edición de un movimiento ya cargado).
+  async function _updateRow(spreadsheetId, sheetName, rowIndex, values) {
+    _cache = {};
+    return gapi.client.sheets.spreadsheets.values.update({
+      spreadsheetId, range: `${sheetName}!A${rowIndex}:E${rowIndex}`,
+      valueInputOption: 'USER_ENTERED',
+      resource: { values: _sanitizeRows([values]) }
+    });
+  }
+
+  // sheetId (el gid numérico, distinto del nombre) hace falta para
+  // deleteDimension — se cachea porque no cambia mientras la hoja exista.
+  let _sheetIdCache = {};
+  async function _getSheetId(spreadsheetId, sheetName) {
+    const key = spreadsheetId + '::' + sheetName;
+    if (_sheetIdCache[key] !== undefined) return _sheetIdCache[key];
+    const res = await gapi.client.sheets.spreadsheets.get({ spreadsheetId, fields: 'sheets.properties' });
+    const sheet = res.result.sheets.find(s => s.properties.title === sheetName);
+    _sheetIdCache[key] = sheet ? sheet.properties.sheetId : null;
+    return _sheetIdCache[key];
+  }
+
+  // Borra una fila puntual de verdad (no solo vacía las celdas), así no
+  // quedan huecos en el medio de la hoja.
+  async function _deleteRow(spreadsheetId, sheetName, rowIndex) {
+    _cache = {};
+    const sheetId = await _getSheetId(spreadsheetId, sheetName);
+    if (sheetId == null) throw new Error(`No se encontró la hoja "${sheetName}"`);
+    return gapi.client.sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      resource: {
+        requests: [{
+          deleteDimension: {
+            range: { sheetId, dimension: 'ROWS', startIndex: rowIndex - 1, endIndex: rowIndex }
+          }
+        }]
+      }
+    });
+  }
+
+  // "_row" es el número de fila real en la hoja (1-based, contando el
+  // encabezado) — lo necesitan updateDevolucion/deleteDevolucion (y sus
+  // equivalentes de Salidas) para saber qué fila puntual tocar al editar o
+  // borrar un movimiento desde el Historial.
   function _rowsToObjects(rows) {
     if (!rows || rows.length < 2) return [];
     const headers = rows[0].map(h => (h || '').toString().trim());
-    return rows.slice(1).map(row => {
+    return rows.slice(1).map((row, i) => {
       const obj = {};
-      headers.forEach((h, i) => { obj[h] = row[i] !== undefined ? row[i] : ''; });
+      headers.forEach((h, idx) => { obj[h] = row[idx] !== undefined ? row[idx] : ''; });
+      obj._row = i + 2;
       return obj;
     });
   }
@@ -413,6 +458,18 @@ const SheetsAPI = (() => {
     return _writeRange(_ownSheetId, `${OWN_SHEET_NAME}!A1`, [row]);
   }
 
+  // Editar/eliminar un movimiento ya cargado: reservado al Maestro (ver
+  // isMaestro() en app.js) — cualquier otro Editor puede seguir cargando
+  // devoluciones/deudas nuevas, pero no corregir ni borrar lo ya guardado.
+  async function updateDevolucion(rowIndex, record) {
+    const row = [record.fecha, record.cliente, record.cantidad, record.usuario, record.observaciones || ''];
+    return _updateRow(_ownSheetId, OWN_SHEET_NAME, rowIndex, row);
+  }
+
+  async function deleteDevolucion(rowIndex) {
+    return _deleteRow(_ownSheetId, OWN_SHEET_NAME, rowIndex);
+  }
+
   // ── Público: Salidas manuales (deuda cargada a mano, propio) ────────────────
   async function readSalidas() {
     const rows = await _readRangeOrEmpty(_ownSheetId, `${SALIDAS_SHEET_NAME}!A:E`);
@@ -424,12 +481,22 @@ const SheetsAPI = (() => {
     return _writeRange(_ownSheetId, `${SALIDAS_SHEET_NAME}!A1`, [row]);
   }
 
+  async function updateSalida(rowIndex, record) {
+    const row = [record.fecha, record.cliente, record.cantidad, record.usuario, record.observaciones || ''];
+    return _updateRow(_ownSheetId, SALIDAS_SHEET_NAME, rowIndex, row);
+  }
+
+  async function deleteSalida(rowIndex) {
+    return _deleteRow(_ownSheetId, SALIDAS_SHEET_NAME, rowIndex);
+  }
+
   function isReady() { return _gapiReady && _gsiReady; }
 
   return {
     init, signOut, isReady, getUserName, getUserEmail, canEdit, canEditDetected,
     readCargas, readPedidos, readDevoluciones, appendDevolucion,
-    readSalidas, appendSalida,
+    updateDevolucion, deleteDevolucion,
+    readSalidas, appendSalida, updateSalida, deleteSalida,
     readClientesConfig, saveClientesConfig, logAccess
   };
 })();

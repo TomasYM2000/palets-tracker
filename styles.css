@@ -109,11 +109,33 @@ input:focus, select:focus, textarea:focus {
 textarea { resize: vertical; min-height: 60px; }
 datalist { display: none; }
 
-/* Selector Devolución / Debe (salida manual) */
-.type-toggle { display: flex; gap: .4rem; background: var(--bg); padding: .3rem; border-radius: 12px; margin-bottom: 1.25rem; }
-.type-btn { flex: 1; justify-content: center; background: transparent; color: var(--text-muted); border-radius: 9px; padding: .6rem .5rem; font-size: .82rem; }
-.type-btn.active { background: var(--surface); color: var(--accent); box-shadow: 0 2px 6px rgba(23,21,31,.1); }
-.type-btn.active[data-tipo="salida"] { color: var(--warn); }
+/* Selector Devolución / Debe (salida manual) — un solo switch deslizante,
+   no dos botones tipo pestaña. */
+.type-switch {
+  display: flex; align-items: center; gap: .6rem; width: 100%;
+  background: none; border: none; padding: .25rem 0 1rem; margin: 0;
+  cursor: pointer; text-align: left;
+}
+.type-switch-track {
+  position: relative; flex-shrink: 0; width: 46px; height: 26px;
+  background: var(--success); border-radius: 999px; transition: background .2s;
+}
+.type-switch[aria-checked="true"] .type-switch-track { background: var(--warn); }
+.type-switch-thumb {
+  position: absolute; top: 3px; left: 3px; width: 20px; height: 20px;
+  border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.35);
+  transition: transform .2s;
+}
+.type-switch[aria-checked="true"] .type-switch-thumb { transform: translateX(20px); }
+.type-switch-option {
+  font-size: .85rem; font-weight: 700; color: var(--text-muted); opacity: .45;
+  transition: color .2s, opacity .2s;
+}
+.type-switch-option[data-tipo="devolucion"] { color: var(--success); }
+.type-switch-option[data-tipo="salida"] { color: var(--warn); }
+.type-switch:not([aria-checked="true"]) .type-switch-option[data-tipo="devolucion"] { opacity: 1; }
+.type-switch[aria-checked="true"] .type-switch-option[data-tipo="salida"] { opacity: 1; }
+.type-switch-sep { color: var(--border); font-size: .85rem; }
 
 /* Cantidad grande con +/- para uso a una mano en celular */
 .qty-control { display: flex; align-items: center; gap: .5rem; }
@@ -157,6 +179,14 @@ datalist { display: none; }
 .tipo-pill.salida { background: #fef3c7; color: var(--warn); }
 .clientes-table input[type="text"] { min-width: 140px; }
 .clientes-table td { vertical-align: middle; }
+
+/* Editar/eliminar movimientos en Historial (solo Maestro) */
+.historial-acciones { white-space: nowrap; }
+.btn-icon {
+  background: none; border: none; padding: .3rem .4rem; font-size: .95rem;
+  border-radius: 6px; box-shadow: none;
+}
+.btn-icon:hover { background: var(--bg); }
 
 /* ── Modal ─────────────────────────────────────────────────────────────────── */
 .modal-overlay {

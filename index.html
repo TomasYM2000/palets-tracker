@@ -41,10 +41,14 @@
 <div class="tab-pane" id="pane-registro">
   <div class="form-card">
     <h2 id="registro-titulo">➕ Registrar devolución de palets</h2>
-    <div class="type-toggle" role="tablist" aria-label="Tipo de movimiento">
-      <button type="button" class="type-btn active" id="tipo-devolucion" data-tipo="devolucion">↩ Me devuelve</button>
-      <button type="button" class="type-btn" id="tipo-salida" data-tipo="salida">📤 Le entregué (debe)</button>
-    </div>
+    <button type="button" id="type-switch" class="type-switch" role="switch" aria-checked="false">
+      <span class="type-switch-track">
+        <span class="type-switch-thumb"></span>
+      </span>
+      <span class="type-switch-option" data-tipo="devolucion">↩ Me devuelve</span>
+      <span class="type-switch-sep">/</span>
+      <span class="type-switch-option" data-tipo="salida">📤 Le entregué (debe)</span>
+    </button>
     <form id="form-devolucion" novalidate>
       <div class="form-grid">
         <div class="form-group full">
@@ -223,6 +227,37 @@
   </div>
 </div>
 
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!-- MODAL EDITAR MOVIMIENTO (solo Maestro, desde Historial)                  -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-editar-movimiento">
+  <div class="modal" style="position:relative">
+    <button class="modal-close" id="modal-editar-close">✕</button>
+    <h2 id="editar-titulo">✏️ Editar movimiento</h2>
+    <form id="form-editar-movimiento">
+      <div class="form-group">
+        <label for="editar-cliente">Cliente</label>
+        <input type="text" id="editar-cliente" list="lista-clientes" required autocomplete="off" maxlength="100" />
+      </div>
+      <div class="form-group">
+        <label for="editar-cantidad">Cantidad</label>
+        <input type="number" id="editar-cantidad" min="1" step="1" required />
+      </div>
+      <div class="form-group">
+        <label for="editar-fecha">Fecha</label>
+        <input type="date" id="editar-fecha" required />
+      </div>
+      <div class="form-group">
+        <label for="editar-obs">Observaciones</label>
+        <textarea id="editar-obs" maxlength="500"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button type="submit" class="btn-success" style="flex:1">💾 Guardar cambios</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <!-- ── Loading overlay ───────────────────────────────────────────────────────── -->
 <div id="loading-overlay">
   <div class="spinner"></div>
@@ -233,9 +268,9 @@
 <div id="toast-container"></div>
 
 <!-- ── Scripts ──────────────────────────────────────────────────────────────── -->
-<script src="sheets.js?v=25"></script>
+<script src="sheets.js?v=26"></script>
 <script src="saldos.js?v=24"></script>
-<script src="app.js?v=25"></script>
+<script src="app.js?v=26"></script>
 <!-- Google APIs (loaded last, callbacks boot the app) -->
 <script src="https://apis.google.com/js/api.js?onload=onGapiLoaded" async defer></script>
 <script src="https://accounts.google.com/gsi/client" async defer onload="onGsiLoaded()"></script>

@@ -219,16 +219,14 @@ const App = (() => {
     document.getElementById('registro-titulo').textContent = textos.titulo;
     document.getElementById('registro-cantidad-label').textContent = textos.cantidadLabel;
     document.getElementById('registro-submit').textContent = textos.submit;
-    document.querySelectorAll('.type-btn').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.tipo === tipo);
-    });
+    document.getElementById('type-switch').setAttribute('aria-checked', tipo === 'salida' ? 'true' : 'false');
   }
 
   function initDevolucionForm() {
     document.getElementById('dev-fecha').value = today();
 
-    document.querySelectorAll('.type-btn').forEach(btn => {
-      btn.addEventListener('click', () => setTipoRegistro(btn.dataset.tipo));
+    document.getElementById('type-switch').addEventListener('click', () => {
+      setTipoRegistro(_tipoRegistro === 'devolucion' ? 'salida' : 'devolucion');
     });
 
     document.getElementById('qty-minus').addEventListener('click', () => {
@@ -398,28 +396,121 @@ const App = (() => {
 
   // ── Historial ───────────────────────────────────────────────────────────────
   // Junta devoluciones (restan saldo) y salidas manuales (suman saldo, "debe")
-  // en una sola lista, distinguidas por la columna Tipo.
+  // en una sola lista, distinguidas por la columna Tipo. Se guarda en
+  // _historialRows (con el índice de cada fila) para que los botones de
+  // Editar/Eliminar (solo Maestro) sepan a qué registro puntual corresponden.
+  let _historialRows = [];
+
   function renderHistorial(filter = '') {
-    const rows = [
+    _historialRows = [
       ..._devoluciones.map(d => ({ ...d, _tipo: 'devolucion' })),
       ..._salidasManual.map(s => ({ ...s, _tipo: 'salida' }))
     ]
       .filter(d => (d['Cliente'] || '').toLowerCase().includes(filter))
       .reverse();
-    if (!rows.length) { document.getElementById('historial-table').innerHTML = '<p class="no-data">Sin movimientos registrados</p>'; return; }
+    if (!_historialRows.length) { document.getElementById('historial-table').innerHTML = '<p class="no-data">Sin movimientos registrados</p>'; return; }
 
+    const maestro = isMaestro();
     document.getElementById('historial-table').innerHTML = `
       <table>
-        <thead><tr><th>Fecha</th><th>Tipo</th><th>Cliente</th><th>Cantidad</th><th>Usuario</th><th>Observaciones</th></tr></thead>
-        <tbody>${rows.map(d => `<tr>
+        <thead><tr><th>Fecha</th><th>Tipo</th><th>Cliente</th><th>Cantidad</th><th>Usuario</th><th>Observaciones</th>${maestro ? '<th>Acciones</th>' : ''}</tr></thead>
+        <tbody>${_historialRows.map((d, i) => `<tr>
           <td>${escapeHtml(d['Fecha'])}</td>
           <td><span class="tipo-pill ${d._tipo}">${d._tipo === 'salida' ? 'Debe' : 'Devolución'}</span></td>
           <td>${escapeHtml(d['Cliente'])}</td>
           <td>${escapeHtml(d['Cantidad'])}</td>
           <td>${escapeHtml(d['Usuario'])}</td>
           <td>${escapeHtml(d['Observaciones'])}</td>
+          ${maestro ? `<td class="historial-acciones">
+            <button type="button" class="btn-icon hist-editar" data-idx="${i}" title="Editar">✏️</button>
+            <button type="button" class="btn-icon hist-eliminar" data-idx="${i}" title="Eliminar">🗑️</button>
+          </td>` : ''}
         </tr>`).join('')}</tbody>
       </table>`;
+
+    if (maestro) {
+      document.querySelectorAll('.hist-editar').forEach(btn => {
+        btn.addEventListener('click', () => abrirEditarMovimiento(parseInt(btn.dataset.idx, 10)));
+      });
+      document.querySelectorAll('.hist-eliminar').forEach(btn => {
+        btn.addEventListener('click', () => eliminarMovimiento(parseInt(btn.dataset.idx, 10)));
+      });
+    }
+  }
+
+  // ── Editar / eliminar un movimiento (Maestro) ─────────────────────────────────
+  let _editando = null; // { tipo: 'devolucion'|'salida', row: número de fila en la hoja }
+
+  function abrirEditarMovimiento(idx) {
+    const item = _historialRows[idx];
+    if (!item) return;
+    _editando = { tipo: item._tipo, row: parseInt(item._row, 10) };
+    document.getElementById('editar-titulo').textContent = item._tipo === 'salida' ? '✏️ Editar deuda' : '✏️ Editar devolución';
+    document.getElementById('editar-cliente').value = item['Cliente'] || '';
+    document.getElementById('editar-cantidad').value = item['Cantidad'] || 1;
+    document.getElementById('editar-fecha').value = item['Fecha'] || today();
+    document.getElementById('editar-obs').value = item['Observaciones'] || '';
+    document.getElementById('modal-editar-movimiento').style.display = 'flex';
+  }
+
+  async function eliminarMovimiento(idx) {
+    const item = _historialRows[idx];
+    if (!item) return;
+    const label = item._tipo === 'salida' ? 'deuda' : 'devolución';
+    if (!confirm(`¿Eliminar esta ${label} de ${item['Cliente']} (${item['Cantidad']} palet(s))? Esta acción no se puede deshacer.`)) return;
+
+    setLoading(true, 'Eliminando…');
+    try {
+      if (item._tipo === 'salida') await SheetsAPI.deleteSalida(parseInt(item._row, 10));
+      else await SheetsAPI.deleteDevolucion(parseInt(item._row, 10));
+      toast('Movimiento eliminado', 'success');
+      await loadData();
+    } catch (e) {
+      if (isAuthError(e)) { handleAuthError(); return; }
+      toast('Error al eliminar: ' + errMsg(e), 'error');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function initEditarMovimientoForm() {
+    document.getElementById('modal-editar-close').addEventListener('click', () => {
+      document.getElementById('modal-editar-movimiento').style.display = 'none';
+    });
+
+    document.getElementById('form-editar-movimiento').addEventListener('submit', async e => {
+      e.preventDefault();
+      if (!isMaestro()) { toast('Solo el Maestro puede editar movimientos', 'error'); return; }
+      if (!_editando) return;
+      const cliente = document.getElementById('editar-cliente').value.trim();
+      const cantidad = parseInt(document.getElementById('editar-cantidad').value);
+      const fecha = document.getElementById('editar-fecha').value;
+      if (!cliente) { toast('Ingresá el cliente', 'error'); return; }
+      if (!cantidad || cantidad <= 0) { toast('La cantidad debe ser mayor a 0', 'error'); return; }
+      if (!fecha) { toast('Ingresá la fecha', 'error'); return; }
+
+      const record = {
+        fecha,
+        cliente,
+        cantidad,
+        usuario: getDisplayName() || SheetsAPI.getUserName(),
+        observaciones: document.getElementById('editar-obs').value.trim()
+      };
+
+      setLoading(true, 'Guardando cambios…');
+      try {
+        if (_editando.tipo === 'salida') await SheetsAPI.updateSalida(_editando.row, record);
+        else await SheetsAPI.updateDevolucion(_editando.row, record);
+        document.getElementById('modal-editar-movimiento').style.display = 'none';
+        toast('Movimiento actualizado', 'success');
+        await loadData();
+      } catch (e) {
+        if (isAuthError(e)) { handleAuthError(); return; }
+        toast('Error al guardar: ' + errMsg(e), 'error');
+      } finally {
+        setLoading(false);
+      }
+    });
   }
 
   // ── Chequeo: pedidos vs cargados ──────────────────────────────────────────────
@@ -506,6 +597,7 @@ const App = (() => {
   function boot() {
     initTabs();
     initDevolucionForm();
+    initEditarMovimientoForm();
 
     document.getElementById('form-welcome').addEventListener('submit', e => {
       e.preventDefault();
