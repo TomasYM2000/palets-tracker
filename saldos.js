@@ -66,34 +66,32 @@ const Saldos = (() => {
   // "salidasManuales" son deudas cargadas a mano desde la app (misma forma de
   // fila que Devoluciones: Cliente/Cantidad) para clientes/entregas que
   // todavía no están en la hoja "Cargas" del administrador.
+  //
+  // Se agrupa por nombre NORMALIZADO (normKey: sin mayúsculas/espacios de
+  // más), no por el texto tal cual — si no, "POLIPAPERS" (como está en
+  // Cargas) y "Polipapers" (como lo autocompletó el teclado del celular al
+  // tipear una devolución) quedan como dos clientes distintos: la devolución
+  // no resta nada de la fila que se ve, aunque el registro se haya guardado
+  // bien. El nombre que se muestra es el primero que aparece (por lo general
+  // el de Cargas, que se procesa primero), para no cambiarle el nombre a
+  // nadie por una variante de tipeo puntual.
   function calcSaldos(cargas, devoluciones, clientesConfig, salidasManuales) {
     const configMap = buildConfigMap(clientesConfig);
     const porCliente = {};
 
-    cargas.forEach(c => {
-      const nombre = resolveCliente(c.cliente, configMap);
+    function acumular(rawCliente, campo, cantidad) {
+      const raw = (rawCliente || '').toString().trim();
+      if (!raw) return;
+      const nombre = resolveCliente(raw, configMap);
       if (!nombre) return; // excluido
-      if (!porCliente[nombre]) porCliente[nombre] = { cliente: nombre, salidos: 0, devueltos: 0 };
-      porCliente[nombre].salidos += c.palets;
-    });
+      const key = normKey(nombre);
+      if (!porCliente[key]) porCliente[key] = { cliente: nombre, salidos: 0, devueltos: 0 };
+      porCliente[key][campo] += cantidad;
+    }
 
-    (salidasManuales || []).forEach(s => {
-      const raw = (s['Cliente'] || '').trim();
-      if (!raw) return;
-      const nombre = resolveCliente(raw, configMap);
-      if (!nombre) return;
-      if (!porCliente[nombre]) porCliente[nombre] = { cliente: nombre, salidos: 0, devueltos: 0 };
-      porCliente[nombre].salidos += parseFloat(s['Cantidad']) || 0;
-    });
-
-    devoluciones.forEach(d => {
-      const raw = (d['Cliente'] || '').trim();
-      if (!raw) return;
-      const nombre = resolveCliente(raw, configMap);
-      if (!nombre) return;
-      if (!porCliente[nombre]) porCliente[nombre] = { cliente: nombre, salidos: 0, devueltos: 0 };
-      porCliente[nombre].devueltos += parseFloat(d['Cantidad']) || 0;
-    });
+    cargas.forEach(c => acumular(c.cliente, 'salidos', c.palets));
+    (salidasManuales || []).forEach(s => acumular(s['Cliente'], 'salidos', parseFloat(s['Cantidad']) || 0));
+    devoluciones.forEach(d => acumular(d['Cliente'], 'devueltos', parseFloat(d['Cantidad']) || 0));
 
     return Object.values(porCliente)
       .map(c => ({ ...c, saldo: parseFloat((c.salidos - c.devueltos).toFixed(2)) }))
@@ -117,23 +115,23 @@ const Saldos = (() => {
     return m ? parseInt(m[1], 10) : 0;
   }
 
+  // Mismo criterio que calcSaldos: agrupar por nombre normalizado, no por el
+  // texto tal cual, para no partir a un cliente en dos filas por una
+  // variante de mayúsculas/espacios entre Pedidos y Cargas.
   function calcChequeo(cargas, pedidos, clientesConfig) {
     const configMap = buildConfigMap(clientesConfig);
     const porCliente = {};
 
-    pedidos.forEach(p => {
-      const nombre = resolveCliente(p.cliente, configMap);
+    function acumular(rawCliente, campo, cantidad) {
+      const nombre = resolveCliente(rawCliente, configMap);
       if (!nombre) return;
-      if (!porCliente[nombre]) porCliente[nombre] = { cliente: nombre, pedidos: 0, cargados: 0 };
-      porCliente[nombre].pedidos += parsePaletsDeTexto(p.observaciones);
-    });
+      const key = normKey(nombre);
+      if (!porCliente[key]) porCliente[key] = { cliente: nombre, pedidos: 0, cargados: 0 };
+      porCliente[key][campo] += cantidad;
+    }
 
-    cargas.forEach(c => {
-      const nombre = resolveCliente(c.cliente, configMap);
-      if (!nombre) return;
-      if (!porCliente[nombre]) porCliente[nombre] = { cliente: nombre, pedidos: 0, cargados: 0 };
-      porCliente[nombre].cargados += c.palets;
-    });
+    pedidos.forEach(p => acumular(p.cliente, 'pedidos', parsePaletsDeTexto(p.observaciones)));
+    cargas.forEach(c => acumular(c.cliente, 'cargados', c.palets));
 
     return Object.values(porCliente)
       .map(c => ({ ...c, diferencia: parseFloat((c.cargados - c.pedidos).toFixed(2)) }))
